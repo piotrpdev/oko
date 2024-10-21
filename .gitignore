@@ -21,3 +21,5 @@ Cargo.lock
 #.idea/
 
 .vscode/*
+scripts/.venv/*
+*.mp4
