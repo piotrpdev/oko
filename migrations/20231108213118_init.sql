@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS videos (
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id)
 );
 
+-- TODO: Remove 'resolution' and 'framerate'
 CREATE TABLE IF NOT EXISTS camera_settings (
     setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
