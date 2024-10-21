@@ -16,8 +16,6 @@ pub struct Camera {
     pub camera_id: i64,
     pub name: String,
     pub ip_address: Option<String>,
-    pub resolution: Option<String>,
-    pub framerate: Option<i32>,
     pub last_connected: Option<DateTime<Utc>>,
     pub is_active: bool,
 }

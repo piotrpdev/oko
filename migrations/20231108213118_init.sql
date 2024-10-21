@@ -9,8 +9,6 @@ CREATE TABLE IF NOT EXISTS cameras (
     camera_id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     ip_address TEXT,
-    resolution TEXT,
-    framerate INTEGER,
     last_connected TIMESTAMP,
     is_active BOOLEAN DEFAULT true
 );
@@ -35,7 +33,6 @@ CREATE TABLE IF NOT EXISTS videos (
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id)
 );
 
--- TODO: Remove 'resolution' and 'framerate'
 CREATE TABLE IF NOT EXISTS camera_settings (
     setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
@@ -53,9 +50,9 @@ INSERT INTO users (user_id, username, password_hash, created_at) VALUES
     (2, 'piotrpdev', '$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw', '2024-10-21 17:02:18'),
     (3, 'joedaly', '$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw', '2024-10-21 17:12:32');
 
-INSERT INTO cameras (camera_id, name, ip_address, resolution, framerate, last_connected) VALUES
-    (1, 'Front Door', '192.168.0.169', '800x600', 5, '2024-10-20 17:56:18'),
-    (2, 'Kitchen', '192.168.0.172', '800x600', 5, '2024-10-20 17:57:22');
+INSERT INTO cameras (camera_id, name, ip_address, last_connected) VALUES
+    (1, 'Front Door', '192.168.0.169', '2024-10-20 17:56:18'),
+    (2, 'Kitchen', '192.168.0.172', '2024-10-20 17:57:22');
 
 INSERT INTO camera_permissions (camera_id, user_id, can_view, can_control) VALUES
     (1, 1, true, true),
