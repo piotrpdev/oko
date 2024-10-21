@@ -7,9 +7,9 @@ use tokio::task;
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
-    id: i64,
+    pub(crate) user_id: i64,
     pub username: String,
-    password: String,
+    pub(crate) password_hash: String,
 }
 
 // Here we've implemented `Debug` manually to avoid accidentally logging the
@@ -17,9 +17,9 @@ pub struct User {
 impl std::fmt::Debug for User {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("User")
-            .field("id", &self.id)
+            .field("user_id", &self.user_id)
             .field("username", &self.username)
-            .field("password", &"[redacted]")
+            .field("password_hash", &"[redacted]")
             .finish()
     }
 }
@@ -28,11 +28,11 @@ impl AuthUser for User {
     type Id = i64;
 
     fn id(&self) -> Self::Id {
-        self.id
+        self.user_id
     }
 
     fn session_auth_hash(&self) -> &[u8] {
-        self.password.as_bytes() // We use the password hash as the auth
+        self.password_hash.as_bytes() // We use the password hash as the auth
                                  // hash--what this means
                                  // is when the user changes their password the
                                  // auth session becomes invalid.
@@ -48,9 +48,10 @@ pub struct Credentials {
     pub next: Option<String>,
 }
 
+// TODO: Make db private again and pass db state to Router as layer
 #[derive(Debug, Clone)]
 pub struct Backend {
-    db: SqlitePool,
+    pub db: SqlitePool,
 }
 
 impl Backend {
@@ -88,13 +89,13 @@ impl AuthnBackend for Backend {
         task::spawn_blocking(|| {
             // We're using password-based authentication--this works by comparing our form
             // input with an argon2 password hash.
-            Ok(user.filter(|user| verify_password(creds.password, &user.password).is_ok()))
+            Ok(user.filter(|user| verify_password(creds.password, &user.password_hash).is_ok()))
         })
         .await?
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let user = sqlx::query_as("select * from users where id = ?")
+        let user = sqlx::query_as("select * from users where user_id = ?")
             .bind(user_id)
             .fetch_optional(&self.db)
             .await?;
