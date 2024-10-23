@@ -9,7 +9,7 @@ use crate::web::App;
 
 mod users;
 mod web;
-mod sql;
+mod db;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

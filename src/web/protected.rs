@@ -20,7 +20,7 @@ pub fn router() -> Router<()> {
 }
 
 mod get {
-    use crate::{sql::{Camera, Video}, users::User};
+    use crate::{db::{Camera, Video}, users::User};
 
     use super::*;
 
