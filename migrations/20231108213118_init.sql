@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS camera_settings (
     FOREIGN KEY (modified_by) REFERENCES users(user_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_camera_permissions_camera ON camera_permissions (camera_id);
+CREATE INDEX IF NOT EXISTS idx_camera_permissions_user ON camera_permissions (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_videos_camera ON videos (camera_id);
+
+CREATE INDEX IF NOT EXISTS idx_camera_settings_camera ON camera_settings (camera_id);
+
 INSERT INTO users (user_id, username, password_hash, created_at) VALUES
     (1, 'admin', '$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw', '2024-10-21 17:01:23'),
     (2, 'piotrpdev', '$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw', '2024-10-21 17:02:18'),
