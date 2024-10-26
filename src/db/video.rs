@@ -1,16 +1,15 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use time::OffsetDateTime;
 
 use crate::db::VideoCameraView;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Video {
     pub video_id: i64,
     pub camera_id: Option<i64>,
     pub file_path: String,
-    pub start_time: DateTime<Utc>,
-    pub end_time: Option<DateTime<Utc>>,
+    pub start_time: OffsetDateTime,
+    pub end_time: Option<OffsetDateTime>,
     pub file_size: Option<i64>,
 }
 

@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS cameras (
-    camera_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    camera_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     ip_address TEXT,
     last_connected TIMESTAMP,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS cameras (
 );
 
 CREATE TABLE IF NOT EXISTS camera_permissions (
-    permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    permission_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
     user_id INTEGER,
     can_view BOOLEAN NOT NULL DEFAULT true,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS camera_permissions (
 );
 
 CREATE TABLE IF NOT EXISTS videos (
-    video_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
     file_path TEXT NOT NULL,
     start_time TIMESTAMP NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS videos (
 );
 
 CREATE TABLE IF NOT EXISTS camera_settings (
-    setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    setting_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
     flashlight_enabled BOOLEAN NOT NULL DEFAULT false,
     resolution TEXT NOT NULL,
