@@ -13,6 +13,10 @@ Fully local home security system
 ## Run
 
 ```bash
+# Note: This installs support for all SQLx databases
+cargo install sqlx-cli
+sqlx database create
+sqlx migrate run
 cargo run
 ```
 

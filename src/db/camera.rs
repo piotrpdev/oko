@@ -18,15 +18,16 @@ impl Camera {
         db: &sqlx::Pool<sqlx::Sqlite>,
         user_id: i64,
     ) -> sqlx::Result<Vec<CameraPermissionView>> {
-        sqlx::query_as(
+        sqlx::query_as!(
+            CameraPermissionView,
             r#"
             SELECT c.camera_id, c.name as camera_name, cp.can_view, cp.can_control
             FROM cameras c
             JOIN camera_permissions cp ON c.camera_id = cp.camera_id
             WHERE cp.user_id = ? AND c.is_active = true
-            "#
+            "#,
+            user_id
         )
-        .bind(user_id)
         .fetch_all(db)
         .await
     }

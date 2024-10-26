@@ -1,8 +1,8 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS cameras (
@@ -10,15 +10,15 @@ CREATE TABLE IF NOT EXISTS cameras (
     name TEXT NOT NULL,
     ip_address TEXT,
     last_connected TIMESTAMP,
-    is_active BOOLEAN DEFAULT true
+    is_active BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE IF NOT EXISTS camera_permissions (
     permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
     user_id INTEGER,
-    can_view BOOLEAN DEFAULT true,
-    can_control BOOLEAN DEFAULT false,
+    can_view BOOLEAN NOT NULL DEFAULT true,
+    can_control BOOLEAN NOT NULL DEFAULT false,
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
@@ -29,18 +29,18 @@ CREATE TABLE IF NOT EXISTS videos (
     file_path TEXT NOT NULL,
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP,
-    file_size INTEGER,  -- in bytes
+    file_size INTEGER,
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id)
 );
 
 CREATE TABLE IF NOT EXISTS camera_settings (
     setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
-    flashlight_enabled BOOLEAN DEFAULT false,
-    resolution TEXT,
-    framerate INTEGER,
-    last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    modified_by INTEGER,
+    flashlight_enabled BOOLEAN NOT NULL DEFAULT false,
+    resolution TEXT NOT NULL,
+    framerate INTEGER NOT NULL,
+    last_modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modified_by INTEGER NOT NULL,
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id),
     FOREIGN KEY (modified_by) REFERENCES users(user_id)
 );

@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-// TODO: Create an actual SQLite View
 #[derive(Debug, Serialize, FromRow)]
 pub struct CameraPermissionView {
     pub camera_id: i64,
