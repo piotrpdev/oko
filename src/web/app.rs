@@ -1,4 +1,4 @@
-use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow};
+use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow, str::FromStr};
 
 use askama_axum::IntoResponse;
 use axum_login::{
@@ -8,7 +8,7 @@ use axum_login::{
 };
 use axum_messages::MessagesManagerLayer;
 use futures::{SinkExt, StreamExt};
-use sqlx::SqlitePool;
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::Duration;
 use tokio::{signal, task::AbortHandle};
 use tower_sessions::cookie::Key;
@@ -29,7 +29,12 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let db = SqlitePool::connect(":memory:").await?;
+        let sqlite_connect_options =
+            SqliteConnectOptions::from_str("sqlite://data.db")?
+                .create_if_missing(true);
+
+        let db = SqlitePool::connect_with(sqlite_connect_options).await?;
+        
         sqlx::migrate!().run(&db).await?;
 
         Ok(Self { db })
