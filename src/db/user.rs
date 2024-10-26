@@ -60,7 +60,9 @@ impl User {
         sqlx::query_as!(
             User,
             r#"
-            SELECT * FROM users WHERE user_id = ?
+            SELECT *
+            FROM users
+            WHERE user_id = ?
             "#,
             user_id
         )
@@ -68,11 +70,13 @@ impl User {
         .await
     }
 
-    pub async fn get_using_username(pool: &SqlitePool, username: String) -> Result<User> {
+    pub async fn get_using_username(pool: &SqlitePool, username: &str) -> Result<User> {
         sqlx::query_as!(
             User,
             r#"
-            SELECT * FROM users WHERE username = ?
+            SELECT *
+            FROM users
+            WHERE username = ?
             "#,
             username
         )
@@ -80,13 +84,16 @@ impl User {
         .await
     }
 
-    pub async fn update(pool: &SqlitePool, user_id: i64, username: &str) -> Result<bool> {
+    pub async fn update(pool: &SqlitePool, user_id: i64, username: &str, password_hash: &str) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
-            UPDATE users SET username = ? WHERE user_id = ?
+            UPDATE users
+            SET username = ?, password_hash = ?
+            WHERE user_id = ?
             "#,
             username,
-            user_id
+            user_id,
+            password_hash
         )
         .execute(pool)
         .await?
@@ -98,7 +105,9 @@ impl User {
     pub async fn delete(pool: &SqlitePool, user_id: i64) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
-            DELETE FROM users WHERE user_id = ?
+            DELETE
+            FROM users
+            WHERE user_id = ?
             "#,
             user_id
         )

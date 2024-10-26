@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sqlx::{Result, SqlitePool};
 use time::OffsetDateTime;
 
 use crate::db::CameraPermissionView;
@@ -12,11 +13,80 @@ pub struct Camera {
     pub is_active: bool,
 }
 
+#[allow(dead_code)]
 impl Camera {
+    pub async fn create(
+        pool: &SqlitePool,
+        name: &str,
+        ip_address: Option<&str>,
+    ) -> Result<i64> {
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO cameras (name, ip_address)
+            VALUES (?, ?)
+            RETURNING camera_id
+            "#,
+            name,
+            ip_address
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(result.camera_id)
+    }
+
+    pub async fn get(pool: &SqlitePool, camera_id: i64) -> Result<Camera> {
+        sqlx::query_as!(
+            Camera,
+            r#"
+            SELECT *
+            FROM cameras
+            WHERE camera_id = ?
+            "#,
+            camera_id
+        )
+        .fetch_one(pool)
+        .await
+    }
+
+    pub async fn update(
+        pool: &SqlitePool,
+        camera_id: i64,
+        name: &str,
+        ip_address: Option<&str>,
+        is_active: bool,
+    ) -> Result<bool> {
+        let rows_affected = sqlx::query!(
+            r#"
+            UPDATE cameras
+            SET name = ?, ip_address = ?, is_active = ?
+            WHERE camera_id = ?
+            "#,
+            name,
+            ip_address,
+            is_active,
+            camera_id
+        )
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn delete(pool: &SqlitePool, camera_id: i64) -> Result<bool> {
+        let rows_affected = sqlx::query!("DELETE FROM cameras WHERE camera_id = ?", camera_id)
+            .execute(pool)
+            .await?
+            .rows_affected();
+
+            Ok(rows_affected > 0)
+    }
+
     pub async fn list_accessible_to_user(
-        db: &sqlx::Pool<sqlx::Sqlite>,
+        db: &SqlitePool,
         user_id: i64,
-    ) -> sqlx::Result<Vec<CameraPermissionView>> {
+    ) -> Result<Vec<CameraPermissionView>> {
         sqlx::query_as!(
             CameraPermissionView,
             r#"

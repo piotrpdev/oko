@@ -47,7 +47,7 @@ impl AuthnBackend for Backend {
         &self,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let user: Self::User = User::get_using_username(&self.db, creds.username).await?;
+        let user: Self::User = User::get_using_username(&self.db, &creds.username).await?;
 
         // Verifying the password is blocking and potentially slow, so we'll do so via
         // `spawn_blocking`.
