@@ -5,7 +5,7 @@ use time::OffsetDateTime;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraSetting {
     pub setting_id: i64,
-    pub camera_id: Option<i64>,
+    pub camera_id: i64,
     pub flashlight_enabled: bool,
     pub resolution: String,
     pub framerate: i64,

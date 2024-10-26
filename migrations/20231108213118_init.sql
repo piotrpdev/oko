@@ -15,12 +15,12 @@ CREATE TABLE IF NOT EXISTS cameras (
 
 CREATE TABLE IF NOT EXISTS camera_permissions (
     permission_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    camera_id INTEGER,
-    user_id INTEGER,
+    camera_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
     can_view BOOLEAN NOT NULL DEFAULT true,
     can_control BOOLEAN NOT NULL DEFAULT false,
-    FOREIGN KEY (camera_id) REFERENCES cameras(camera_id),
-    FOREIGN KEY (user_id) REFERENCES users(user_id)
+    FOREIGN KEY (camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS videos (
@@ -30,19 +30,19 @@ CREATE TABLE IF NOT EXISTS videos (
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP,
     file_size INTEGER,
-    FOREIGN KEY (camera_id) REFERENCES cameras(camera_id)
+    FOREIGN KEY (camera_id) REFERENCES cameras(camera_id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS camera_settings (
     setting_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    camera_id INTEGER,
+    camera_id INTEGER NOT NULL,
     flashlight_enabled BOOLEAN NOT NULL DEFAULT false,
     resolution TEXT NOT NULL,
     framerate INTEGER NOT NULL,
     last_modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modified_by INTEGER NOT NULL,
-    FOREIGN KEY (camera_id) REFERENCES cameras(camera_id),
-    FOREIGN KEY (modified_by) REFERENCES users(user_id)
+    FOREIGN KEY (camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE,
+    FOREIGN KEY (modified_by) REFERENCES users(user_id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_camera_permissions_camera ON camera_permissions (camera_id);
