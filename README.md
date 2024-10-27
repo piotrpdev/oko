@@ -27,6 +27,20 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
+### Test
+
+#### Check Test Coverage
+
+```bash
+cargo install cargo-tarpaulin
+# Create report in Html format (omit --out flag for report in console)
+cargo tarpaulin --out Html
+# Serve however you want
+python3 -m http.server
+# View report
+xdg-open http://localhost:8000/tarpaulin-report.html
+```
+
 ## License
 
 This project is licensed under the [GNU GPL v3.0][license].
