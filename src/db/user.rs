@@ -19,6 +19,7 @@ impl std::fmt::Debug for User {
             .field("user_id", &self.user_id)
             .field("username", &self.username)
             .field("password_hash", &"[redacted]")
+            .field("created_at", &self.created_at)
             .finish()
     }
 }
@@ -92,8 +93,8 @@ impl User {
             WHERE user_id = ?
             "#,
             username,
-            user_id,
-            password_hash
+            password_hash,
+            user_id
         )
         .execute(pool)
         .await?
@@ -125,5 +126,115 @@ impl User {
             password_hash: "[redacted]".to_string(),
             created_at: self.created_at
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test(fixtures("users"))]
+    async fn create(pool: SqlitePool) -> sqlx::Result<()> {
+        let username = "test_user";
+        let password_hash = "test_hash";
+
+        let test_user_id = User::create(&pool, username, password_hash).await?;
+        
+        assert_eq!(test_user_id, 4);
+
+        let test_user = User::get(&pool, 4).await?;
+
+        assert_eq!(test_user.username, username);
+        assert_eq!(test_user.password_hash, password_hash);
+        
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("users"))]
+    async fn create_existing(pool: SqlitePool) -> sqlx::Result<()> {
+        let username = "piotrpdev";
+        let password_hash = "test_hash";
+
+        let test_user_id = User::create(&pool, username, password_hash).await;
+
+        assert!(test_user_id.is_err());
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("users"))]
+    async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+        let user_id = 2;
+        let test_user = User::get(&pool, user_id).await?;
+        
+        assert_eq!(test_user.user_id, user_id);
+        assert_eq!(test_user.username, "piotrpdev");
+        assert_eq!(test_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
+        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("users"))]
+    async fn get_using_username(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+        let username = "piotrpdev";
+
+        let test_user = User::get_using_username(&pool, username).await?;
+        
+        assert_eq!(test_user.user_id, 2);
+        assert_eq!(test_user.username, username);
+        assert_eq!(test_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
+        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("users"))]
+    async fn update(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+        let user_id = 2;
+        let username = "new_joedaly";
+        let password_hash = "new_hash";
+
+        let updated = User::update(&pool, user_id, username, password_hash).await?;
+        
+        assert!(updated);
+
+        let test_user = User::get(&pool, user_id).await?;
+
+        assert_eq!(test_user.user_id, user_id);
+        assert_eq!(test_user.username, username);
+        assert_eq!(test_user.password_hash, password_hash);
+        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("users"))]
+    async fn delete(pool: SqlitePool) -> sqlx::Result<()> {
+        let user_id = 2;
+        let deleted = User::delete(&pool, user_id).await?;
+        
+        assert!(deleted);
+
+        let test_user = User::get(&pool, user_id).await;
+
+        assert!(test_user.is_err());
+        
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("users"))]
+    async fn to_redacted_clone(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+        let user_id = 2;
+
+        let test_user = User::get(&pool, user_id).await?;
+        let redacted_user = test_user.to_redacted_clone();
+        
+        assert_eq!(redacted_user.user_id, user_id);
+        assert_eq!(redacted_user.username, "piotrpdev");
+        assert_eq!(redacted_user.password_hash, "[redacted]");
+        assert_eq!(redacted_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        
+        Ok(())
     }
 }

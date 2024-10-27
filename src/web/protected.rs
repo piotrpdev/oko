@@ -18,7 +18,7 @@ pub fn router() -> Router<()> {
 }
 
 mod get {
-    use crate::db::{Camera, User};
+    use crate::db::Camera;
 
     use super::*;
 
@@ -30,7 +30,7 @@ mod get {
                     .await
                     .unwrap();
 
-                let safe_user = User::to_redacted_clone(&user);
+                let safe_user = user.to_redacted_clone();
 
                 ProtectedTemplate {
                     messages: messages.into_iter().collect(),

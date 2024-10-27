@@ -101,3 +101,93 @@ impl Camera {
         .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test(fixtures("cameras"))]
+    async fn create(pool: SqlitePool) -> sqlx::Result<()> {
+        let camera_name = "Test Camera";
+        let ip_address: std::option::Option<std::string::String> = None;
+        
+        let camera_id = Camera::create(&pool, camera_name, ip_address.as_deref()).await?;
+
+        assert_eq!(camera_id, 3);
+
+        let camera = Camera::get(&pool, camera_id).await?;
+
+        assert_eq!(camera.name, camera_name);
+        assert_eq!(camera.ip_address, ip_address);
+        assert!(camera.is_active);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("cameras"))]
+    async fn get(pool: SqlitePool) -> sqlx::Result<()> {
+        let camera_id = 1;
+
+        let camera = Camera::get(&pool, camera_id).await?;
+
+        assert_eq!(camera.camera_id, camera_id);
+        assert_eq!(camera.name, "Front Door");
+        assert_eq!(camera.ip_address, Some("192.168.0.169".to_string()));
+        assert!(camera.is_active);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("cameras"))]
+    async fn update(pool: SqlitePool) -> sqlx::Result<()> {
+        let camera_id = 1;
+        let camera_name = "Updated Camera";
+        let ip_address: std::option::Option<std::string::String> = Some("192.168.0.24".to_string());
+        let is_active = false;
+
+        let updated = Camera::update(&pool, camera_id, camera_name, ip_address.as_deref(), is_active).await?;
+
+        assert!(updated);
+
+        let camera = Camera::get(&pool, 1).await?;
+
+        assert_eq!(camera.name, camera_name);
+        assert_eq!(camera.ip_address, ip_address);
+        assert!(!camera.is_active);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("cameras"))]
+    async fn delete(pool: SqlitePool) -> sqlx::Result<()> {
+        let camera_id = 1;
+        let deleted = Camera::delete(&pool, camera_id).await?;
+
+        assert!(deleted);
+
+        let camera = Camera::get(&pool, camera_id).await;
+
+        assert!(camera.is_err());
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("users", "cameras", "camera_permissions"))]
+    async fn list_accessible_to_user(pool: SqlitePool) -> sqlx::Result<()> {
+        let cameras = Camera::list_accessible_to_user(&pool, 3).await?;
+
+        assert_eq!(cameras.len(), 2);
+
+        assert_eq!(cameras[0].camera_id, 1);
+        assert_eq!(cameras[0].camera_name, "Front Door");
+        assert!(cameras[0].can_view);
+        assert!(!cameras[0].can_control);
+
+        assert_eq!(cameras[1].camera_id, 2);
+        assert_eq!(cameras[1].camera_name, "Kitchen");
+        assert!(!cameras[1].can_view);
+        assert!(!cameras[1].can_control);
+
+        Ok(())
+    }
+}
