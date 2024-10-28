@@ -108,7 +108,7 @@ impl Video {
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures("cameras", "videos"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn create(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let file_path = "/path/to/video.mp4";
@@ -127,7 +127,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("cameras", "videos"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let video_id = 1;
         let video = Video::get(&pool, video_id).await?;
@@ -141,7 +141,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("cameras", "videos"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn update(pool: SqlitePool) -> Result<()> {
         let video_id = 1;
         let end_time = OffsetDateTime::now_utc();
@@ -157,7 +157,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("cameras", "videos"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let video_id = 1;
         let deleted = Video::delete(&pool, video_id).await?;
@@ -169,7 +169,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("cameras", "videos"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn list_for_camera(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let videos = Video::list_for_camera(&pool, camera_id).await?;

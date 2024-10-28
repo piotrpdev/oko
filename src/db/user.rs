@@ -133,7 +133,7 @@ impl User {
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures("users"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn create(pool: SqlitePool) -> Result<()> {
         let username = "test_user";
         let password_hash = "test_hash";
@@ -150,7 +150,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn create_existing(pool: SqlitePool) -> Result<()> {
         let username = "piotrpdev";
         let password_hash = "test_hash";
@@ -162,7 +162,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let user_id = 2;
         let test_user = User::get(&pool, user_id).await?;
@@ -175,7 +175,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn get_using_username(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let username = "piotrpdev";
 
@@ -189,7 +189,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn update(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let user_id = 2;
         let username = "new_joedaly";
@@ -209,7 +209,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let user_id = 2;
         let deleted = User::delete(&pool, user_id).await?;
@@ -223,7 +223,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn to_redacted_clone(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let user_id = 2;
 

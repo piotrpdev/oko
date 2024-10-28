@@ -102,7 +102,7 @@ impl CameraSetting {
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_settings"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
     async fn create(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let flashlight_enabled = true;
@@ -130,7 +130,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_settings"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
     async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let setting_id = 1;
 
@@ -147,7 +147,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_settings"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
     async fn update(pool: SqlitePool) -> Result<()> {
         let setting_id = 1;
         let flashlight_enabled = true;
@@ -177,7 +177,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_settings"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let setting_id = 1;
 

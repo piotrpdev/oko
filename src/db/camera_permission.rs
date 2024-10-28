@@ -95,7 +95,7 @@ impl CameraPermission {
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_permissions"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
     async fn create(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let user_id = 1;
@@ -114,7 +114,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_permissions"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
     async fn get(pool: SqlitePool) -> Result<()> {
         let permission_id = 1;
 
@@ -129,7 +129,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_permissions"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
     async fn update(pool: SqlitePool) -> Result<()> {
         let permission_id = 1;
         let can_view = false;
@@ -147,7 +147,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_permissions"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let permission_id = 1;
 

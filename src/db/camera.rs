@@ -106,7 +106,7 @@ impl Camera {
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures("cameras"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn create(pool: SqlitePool) -> Result<()> {
         let camera_name = "Test Camera";
         let ip_address: std::option::Option<std::string::String> = None;
@@ -124,7 +124,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("cameras"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn get(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
 
@@ -138,7 +138,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("cameras"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn update(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let camera_name = "Updated Camera";
@@ -158,7 +158,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("cameras"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let deleted = Camera::delete(&pool, camera_id).await?;
@@ -172,7 +172,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("users", "cameras", "camera_permissions"))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
     async fn list_accessible_to_user(pool: SqlitePool) -> Result<()> {
         let cameras = Camera::list_accessible_to_user(&pool, 3).await?;
 
