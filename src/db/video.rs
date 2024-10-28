@@ -88,7 +88,7 @@ impl Video {
     pub async fn list_for_camera(
         db: &sqlx::Pool<sqlx::Sqlite>,
         camera_id: i64,
-    ) -> sqlx::Result<Vec<VideoCameraView>> {
+    ) -> Result<Vec<VideoCameraView>> {
         sqlx::query_as!(
             VideoCameraView,
             r#"
@@ -109,7 +109,7 @@ mod tests {
     use super::*;
 
     #[sqlx::test(fixtures("cameras", "videos"))]
-    async fn create(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn create(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let file_path = "/path/to/video.mp4";
         let start_time = OffsetDateTime::now_utc();
@@ -142,7 +142,7 @@ mod tests {
     }
 
     #[sqlx::test(fixtures("cameras", "videos"))]
-    async fn update(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn update(pool: SqlitePool) -> Result<()> {
         let video_id = 1;
         let end_time = OffsetDateTime::now_utc();
         let file_size = 2048;
@@ -158,7 +158,7 @@ mod tests {
     }
 
     #[sqlx::test(fixtures("cameras", "videos"))]
-    async fn delete(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn delete(pool: SqlitePool) -> Result<()> {
         let video_id = 1;
         let deleted = Video::delete(&pool, video_id).await?;
         assert!(deleted);
@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[sqlx::test(fixtures("cameras", "videos"))]
-    async fn list_for_camera(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn list_for_camera(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let videos = Video::list_for_camera(&pool, camera_id).await?;
 

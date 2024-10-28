@@ -134,7 +134,7 @@ mod tests {
     use super::*;
 
     #[sqlx::test(fixtures("users"))]
-    async fn create(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn create(pool: SqlitePool) -> Result<()> {
         let username = "test_user";
         let password_hash = "test_hash";
 
@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[sqlx::test(fixtures("users"))]
-    async fn create_existing(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn create_existing(pool: SqlitePool) -> Result<()> {
         let username = "piotrpdev";
         let password_hash = "test_hash";
 
@@ -210,7 +210,7 @@ mod tests {
     }
 
     #[sqlx::test(fixtures("users"))]
-    async fn delete(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn delete(pool: SqlitePool) -> Result<()> {
         let user_id = 2;
         let deleted = User::delete(&pool, user_id).await?;
         

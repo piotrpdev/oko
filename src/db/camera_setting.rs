@@ -103,7 +103,7 @@ mod tests {
     use super::*;
 
     #[sqlx::test(fixtures("users", "cameras", "camera_settings"))]
-    async fn create(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn create(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
         let flashlight_enabled = true;
         let resolution = "1920x1080";
@@ -148,7 +148,7 @@ mod tests {
     }
 
     #[sqlx::test(fixtures("users", "cameras", "camera_settings"))]
-    async fn update(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn update(pool: SqlitePool) -> Result<()> {
         let setting_id = 1;
         let flashlight_enabled = true;
         let resolution = "1920x1080";
@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[sqlx::test(fixtures("users", "cameras", "camera_settings"))]
-    async fn delete(pool: SqlitePool) -> sqlx::Result<()> {
+    async fn delete(pool: SqlitePool) -> Result<()> {
         let setting_id = 1;
 
         let deleted = CameraSetting::delete(&pool, setting_id).await?;
