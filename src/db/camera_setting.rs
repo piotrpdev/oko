@@ -10,30 +10,45 @@ pub struct CameraSetting {
     pub resolution: String,
     pub framerate: i64,
     pub last_modified: OffsetDateTime,
-    pub modified_by: i64,
+    pub modified_by: Option<i64>,
 }
 
-#[allow(dead_code)]
+pub struct CameraSettingDefaults {
+    pub flashlight_enabled: bool
+}
+
+impl CameraSettingDefaults {
+    pub fn last_modified(&self) -> OffsetDateTime {
+        OffsetDateTime::now_utc()
+    }
+}
+
 impl CameraSetting {
+    pub const DEFAULT: CameraSettingDefaults = CameraSettingDefaults {
+        flashlight_enabled: false
+    };
+
     pub async fn create(
         pool: &SqlitePool,
         camera_id: i64,
         flashlight_enabled: bool,
         resolution: &str,
         framerate: i64,
-        modified_by: i64,
+        last_modified: OffsetDateTime,
+        modified_by: Option<i64>,
     ) -> Result<i64> {
         let result = sqlx::query!(
             r#"
             INSERT INTO camera_settings 
-            (camera_id, flashlight_enabled, resolution, framerate, modified_by)
-            VALUES (?, ?, ?, ?, ?)
+            (camera_id, flashlight_enabled, resolution, framerate, last_modified, modified_by)
+            VALUES (?, ?, ?, ?, ?, ?)
             RETURNING setting_id
             "#,
             camera_id,
             flashlight_enabled,
             resolution,
             framerate,
+            last_modified,
             modified_by
         )
         .fetch_one(pool)
@@ -65,19 +80,21 @@ impl CameraSetting {
         flashlight_enabled: bool,
         resolution: &str,
         framerate: i64,
-        modified_by: i64,
+        last_modified: OffsetDateTime,
+        modified_by: Option<i64>,
     ) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
             UPDATE camera_settings
             SET flashlight_enabled = ?, resolution = ?, 
-                framerate = ?, modified_by = ?,
-                last_modified = CURRENT_TIMESTAMP
+                framerate = ?, last_modified = ?,
+                modified_by = ?
             WHERE setting_id = ?
             "#,
             flashlight_enabled,
             resolution,
             framerate,
+            last_modified,
             modified_by,
             setting_id
         )
@@ -95,5 +112,104 @@ impl CameraSetting {
             .rows_affected();
     
         Ok(rows_affected > 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    async fn create(pool: SqlitePool) -> Result<()> {
+        let camera_id = 1;
+        let flashlight_enabled = true;
+        let resolution = "1920x1080";
+        let framerate = 30;
+        let last_modified = CameraSetting::DEFAULT.last_modified();
+        let modified_by = Some(1);
+
+        let setting_id = CameraSetting::create(
+            &pool,
+            camera_id,
+            flashlight_enabled,
+            resolution,
+            framerate,
+            last_modified,
+            modified_by,
+        )
+        .await?;
+
+        let setting = CameraSetting::get(&pool, setting_id).await?;
+        assert_eq!(setting.camera_id, camera_id);
+        assert_eq!(setting.flashlight_enabled, flashlight_enabled);
+        assert_eq!(setting.resolution, resolution);
+        assert_eq!(setting.framerate, framerate);
+        assert_eq!(setting.last_modified, last_modified);
+        assert_eq!(setting.modified_by, modified_by);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+        let setting_id = 1;
+
+        let setting = CameraSetting::get(&pool, setting_id).await?;
+
+        assert_eq!(setting.setting_id, setting_id);
+        assert_eq!(setting.camera_id, 1);
+        assert!(!setting.flashlight_enabled);
+        assert_eq!(setting.resolution, "800x600");
+        assert_eq!(setting.framerate, 5);
+        assert_eq!(setting.last_modified, OffsetDateTime::from_unix_timestamp(1729530153)?);
+        assert_eq!(setting.modified_by, Some(1));
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    async fn update(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+        let setting_id = 1;
+        let flashlight_enabled = true;
+        let resolution = "1920x1080";
+        let framerate = 30;
+        let last_modified = OffsetDateTime::from_unix_timestamp(1729526553)?;
+        let modified_by = Some(1);
+
+        let updated = CameraSetting::update(
+            &pool,
+            setting_id,
+            flashlight_enabled,
+            resolution,
+            framerate,
+            last_modified,
+            modified_by,
+        )
+        .await?;
+
+        assert!(updated);
+
+        let setting = CameraSetting::get(&pool, setting_id).await?;
+        assert_eq!(setting.camera_id, 1);
+        assert_eq!(setting.flashlight_enabled, flashlight_enabled);
+        assert_eq!(setting.resolution, resolution);
+        assert_eq!(setting.framerate, framerate);
+        assert_eq!(setting.last_modified, last_modified);
+        assert_eq!(setting.modified_by, modified_by);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    async fn delete(pool: SqlitePool) -> Result<()> {
+        let setting_id = 1;
+
+        let deleted = CameraSetting::delete(&pool, setting_id).await?;
+        assert!(deleted);
+
+        let setting = CameraSetting::get(&pool, setting_id).await;
+        assert!(setting.is_err());
+
+        Ok(())
     }
 }

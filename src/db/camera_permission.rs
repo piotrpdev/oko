@@ -10,8 +10,17 @@ pub struct CameraPermission {
     pub can_control: bool,
 }
 
-#[allow(dead_code)]
+pub struct CameraPermissionDefaults {
+    pub can_view: bool,
+    pub can_control: bool
+}
+
 impl CameraPermission {
+    pub const DEFAULT: CameraPermissionDefaults = CameraPermissionDefaults {
+        can_view: true,
+        can_control: false
+    };
+
     pub async fn create(
         pool: &SqlitePool,
         camera_id: i64,
@@ -88,5 +97,77 @@ impl CameraPermission {
         .rows_affected();
 
         Ok(rows_affected > 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
+    async fn create(pool: SqlitePool) -> Result<()> {
+        let camera_id = 1;
+        let user_id = 1;
+        let can_view = true;
+        let can_control = false;
+
+        let permission_id = CameraPermission::create(&pool, camera_id, user_id, can_view, can_control).await?;
+
+        let permission = CameraPermission::get(&pool, permission_id).await?;
+
+        assert_eq!(permission.camera_id, camera_id);
+        assert_eq!(permission.user_id, user_id);
+        assert_eq!(permission.can_view, can_view);
+        assert_eq!(permission.can_control, can_control);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
+    async fn get(pool: SqlitePool) -> Result<()> {
+        let permission_id = 1;
+
+        let permission = CameraPermission::get(&pool, permission_id).await?;
+
+        assert_eq!(permission.permission_id, permission_id);
+        assert_eq!(permission.camera_id, 1);
+        assert_eq!(permission.user_id, 1);
+        assert!(permission.can_view);
+        assert!(permission.can_control);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
+    async fn update(pool: SqlitePool) -> Result<()> {
+        let permission_id = 1;
+        let can_view = false;
+        let can_control = true;
+
+        let updated = CameraPermission::update(&pool, permission_id, can_view, can_control).await?;
+
+        assert!(updated);
+
+        let permission = CameraPermission::get(&pool, permission_id).await?;
+
+        assert_eq!(permission.can_view, can_view);
+        assert_eq!(permission.can_control, can_control);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
+    async fn delete(pool: SqlitePool) -> Result<()> {
+        let permission_id = 1;
+
+        let deleted = CameraPermission::delete(&pool, permission_id).await?;
+
+        assert!(deleted);
+
+        let permission = CameraPermission::get(&pool, permission_id).await;
+
+        assert!(permission.is_err());
+
+        Ok(())
     }
 }
