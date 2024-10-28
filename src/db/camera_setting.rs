@@ -10,7 +10,7 @@ pub struct CameraSetting {
     pub resolution: String,
     pub framerate: i64,
     pub last_modified: OffsetDateTime,
-    pub modified_by: i64,
+    pub modified_by: Option<i64>,
 }
 
 #[allow(dead_code)]
@@ -21,7 +21,7 @@ impl CameraSetting {
         flashlight_enabled: bool,
         resolution: &str,
         framerate: i64,
-        modified_by: i64,
+        modified_by: Option<i64>,
     ) -> Result<i64> {
         let result = sqlx::query!(
             r#"
@@ -65,7 +65,7 @@ impl CameraSetting {
         flashlight_enabled: bool,
         resolution: &str,
         framerate: i64,
-        modified_by: i64,
+        modified_by: Option<i64>,
     ) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
@@ -108,7 +108,7 @@ mod tests {
         let flashlight_enabled = true;
         let resolution = "1920x1080";
         let framerate = 30;
-        let modified_by = 1;
+        let modified_by = Some(1);
 
         let setting_id = CameraSetting::create(
             &pool,
@@ -142,7 +142,7 @@ mod tests {
         assert_eq!(setting.resolution, "800x600");
         assert_eq!(setting.framerate, 5);
         assert_eq!(setting.last_modified, OffsetDateTime::from_unix_timestamp(1729530153)?);
-        assert_eq!(setting.modified_by, 1);
+        assert_eq!(setting.modified_by, Some(1));
 
         Ok(())
     }
@@ -153,7 +153,7 @@ mod tests {
         let flashlight_enabled = true;
         let resolution = "1920x1080";
         let framerate = 30;
-        let modified_by = 1;
+        let modified_by = Some(1);
 
         let updated = CameraSetting::update(
             &pool,

@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS camera_settings (
     resolution TEXT NOT NULL,
     framerate INTEGER NOT NULL,
     last_modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    modified_by INTEGER NOT NULL,
+    modified_by INTEGER,
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE,
     FOREIGN KEY (modified_by) REFERENCES users(user_id) ON DELETE SET NULL
 );
