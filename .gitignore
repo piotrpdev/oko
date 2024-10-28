@@ -24,3 +24,5 @@ Cargo.lock
 scripts/.venv/*
 *.mp4
 *.db*
+
+tarpaulin-report.html
