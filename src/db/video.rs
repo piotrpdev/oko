@@ -14,18 +14,18 @@ pub struct Video {
     pub file_size: Option<i64>,
 }
 
-pub struct VideoDefaults {
+pub struct Default {
     pub end_time: Option<OffsetDateTime>
 }
 
-impl VideoDefaults {
-    pub fn start_time(&self) -> OffsetDateTime {
+impl Default {
+    pub fn start_time() -> OffsetDateTime {
         OffsetDateTime::now_utc()
     }
 }
 
 impl Video {
-    pub const DEFAULT: VideoDefaults = VideoDefaults {
+    pub const DEFAULT: Default = Default {
         end_time: None
     };
 
@@ -55,7 +55,7 @@ impl Video {
         Ok(result.video_id)
     }
 
-    pub async fn get(pool: &SqlitePool, video_id: i64) -> Result<Video> {
+    pub async fn get(pool: &SqlitePool, video_id: i64) -> Result<Self> {
         sqlx::query_as!(
             Video,
             r#"
@@ -156,8 +156,8 @@ mod tests {
         assert_eq!(video.video_id, video_id);
         assert_eq!(video.camera_id, Some(1));
         assert_eq!(video.file_path, "/home/piotrpdev/oko/scripts/1.mp4");
-        assert_eq!(video.start_time, OffsetDateTime::from_unix_timestamp(1729479512)?);
-        assert_eq!(video.file_size, Some(6762403));
+        assert_eq!(video.start_time, OffsetDateTime::from_unix_timestamp(1_729_479_512)?);
+        assert_eq!(video.file_size, Some(6_762_403));
 
         Ok(())
     }
@@ -198,11 +198,11 @@ mod tests {
         let videos = Video::list_for_camera(&pool, camera_id).await?;
 
         assert_eq!(videos.len(), 1);
-        assert_eq!(videos[0].video_id, 1);
-        assert_eq!(videos[0].camera_id, Some(1));
-        assert_eq!(videos[0].camera_name, "Front Door");
-        assert_eq!(videos[0].file_path, "/home/piotrpdev/oko/scripts/1.mp4");
-        assert_eq!(videos[0].file_size, Some(6762403));
+        assert_eq!(videos.first().unwrap().video_id, 1);
+        assert_eq!(videos.first().unwrap().camera_id, Some(1));
+        assert_eq!(videos.first().unwrap().camera_name, "Front Door");
+        assert_eq!(videos.first().unwrap().file_path, "/home/piotrpdev/oko/scripts/1.mp4");
+        assert_eq!(videos.first().unwrap().file_size, Some(6_762_403));
 
         Ok(())
     }

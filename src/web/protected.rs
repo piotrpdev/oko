@@ -20,7 +20,7 @@ pub fn router() -> Router<()> {
 mod get {
     use crate::db::Camera;
 
-    use super::*;
+    use super::{AuthSession, IntoResponse, Messages, ProtectedTemplate, StatusCode};
 
     pub async fn protected(auth_session: AuthSession, messages: Messages) -> impl IntoResponse {
         match auth_session.user {

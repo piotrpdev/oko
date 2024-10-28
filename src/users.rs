@@ -23,7 +23,7 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn new(db: SqlitePool) -> Self {
+    pub const fn new(db: SqlitePool) -> Self {
         Self { db }
     }
 }

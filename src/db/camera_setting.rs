@@ -13,18 +13,19 @@ pub struct CameraSetting {
     pub modified_by: Option<i64>,
 }
 
-pub struct CameraSettingDefaults {
+pub struct Default {
     pub flashlight_enabled: bool
 }
 
-impl CameraSettingDefaults {
+impl Default {
+    #[allow(clippy::unused_self)]
     pub fn last_modified(&self) -> OffsetDateTime {
         OffsetDateTime::now_utc()
     }
 }
 
 impl CameraSetting {
-    pub const DEFAULT: CameraSettingDefaults = CameraSettingDefaults {
+    pub const DEFAULT: Default = Default {
         flashlight_enabled: false
     };
 
@@ -60,7 +61,7 @@ impl CameraSetting {
     pub async fn get(
         pool: &SqlitePool,
         setting_id: i64,
-    ) -> Result<CameraSetting> {
+    ) -> Result<Self> {
         sqlx::query_as!(
             CameraSetting,
             r#"
@@ -161,7 +162,7 @@ mod tests {
         assert!(!setting.flashlight_enabled);
         assert_eq!(setting.resolution, "800x600");
         assert_eq!(setting.framerate, 5);
-        assert_eq!(setting.last_modified, OffsetDateTime::from_unix_timestamp(1729530153)?);
+        assert_eq!(setting.last_modified, OffsetDateTime::from_unix_timestamp(1_729_530_153)?);
         assert_eq!(setting.modified_by, Some(1));
 
         Ok(())
@@ -173,7 +174,7 @@ mod tests {
         let flashlight_enabled = true;
         let resolution = "1920x1080";
         let framerate = 30;
-        let last_modified = OffsetDateTime::from_unix_timestamp(1729526553)?;
+        let last_modified = OffsetDateTime::from_unix_timestamp(1_729_526_553)?;
         let modified_by = Some(1);
 
         let updated = CameraSetting::update(

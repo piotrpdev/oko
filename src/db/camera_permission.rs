@@ -10,13 +10,13 @@ pub struct CameraPermission {
     pub can_control: bool,
 }
 
-pub struct CameraPermissionDefaults {
+pub struct Default {
     pub can_view: bool,
     pub can_control: bool
 }
 
 impl CameraPermission {
-    pub const DEFAULT: CameraPermissionDefaults = CameraPermissionDefaults {
+    pub const DEFAULT: Default = Default {
         can_view: true,
         can_control: false
     };
@@ -48,7 +48,7 @@ impl CameraPermission {
     pub async fn get(
         pool: &SqlitePool,
         permission_id: i64,
-    ) -> Result<CameraPermission> {
+    ) -> Result<Self> {
         sqlx::query_as!(
             CameraPermission,
             r#"

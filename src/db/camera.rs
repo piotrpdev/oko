@@ -13,14 +13,14 @@ pub struct Camera {
     pub is_active: bool,
 }
 
-pub struct CameraDefaults {
+pub struct Default {
     pub ip_address: Option<String>,
     pub last_connected: Option<OffsetDateTime>,
     pub is_active: bool
 }
 
 impl Camera {
-    pub const DEFAULT: CameraDefaults = CameraDefaults {
+    pub const DEFAULT: Default = Default {
         ip_address: None,
         last_connected: None,
         is_active: true
@@ -50,7 +50,7 @@ impl Camera {
         Ok(result.camera_id)
     }
 
-    pub async fn get(pool: &SqlitePool, camera_id: i64) -> Result<Camera> {
+    pub async fn get(pool: &SqlitePool, camera_id: i64) -> Result<Self> {
         sqlx::query_as!(
             Camera,
             r#"
@@ -163,7 +163,7 @@ mod tests {
         let camera_id = 1;
         let camera_name = "Updated Camera";
         let ip_address = Some("192.168.0.24".to_string());
-        let last_connected = Some(time::OffsetDateTime::from_unix_timestamp(1729443378)?);
+        let last_connected = Some(time::OffsetDateTime::from_unix_timestamp(1_729_443_378)?);
         let is_active = false;
 
         let updated = Camera::update(&pool, camera_id, camera_name, ip_address.as_deref(), last_connected, is_active).await?;
@@ -200,15 +200,15 @@ mod tests {
 
         assert_eq!(cameras.len(), 2);
 
-        assert_eq!(cameras[0].camera_id, 1);
-        assert_eq!(cameras[0].camera_name, "Front Door");
-        assert!(cameras[0].can_view);
-        assert!(!cameras[0].can_control);
+        assert_eq!(cameras.first().unwrap().camera_id, 1);
+        assert_eq!(cameras.first().unwrap().camera_name, "Front Door");
+        assert!(cameras.first().unwrap().can_view);
+        assert!(!cameras.first().unwrap().can_control);
 
-        assert_eq!(cameras[1].camera_id, 2);
-        assert_eq!(cameras[1].camera_name, "Kitchen");
-        assert!(!cameras[1].can_view);
-        assert!(!cameras[1].can_control);
+        assert_eq!(cameras.get(1).unwrap().camera_id, 2);
+        assert_eq!(cameras.get(1).unwrap().camera_name, "Kitchen");
+        assert!(!cameras.get(1).unwrap().can_view);
+        assert!(!cameras.get(1).unwrap().can_control);
 
         Ok(())
     }

@@ -39,16 +39,17 @@ impl AuthUser for User {
     }
 }
 
-pub struct UserDefaults {}
+pub struct Default {}
 
-impl UserDefaults {
+impl Default {
+    #[allow(clippy::unused_self)]
     pub fn created_at(&self) -> OffsetDateTime {
         OffsetDateTime::now_utc()
     }
 }
 
 impl User {
-    pub const DEFAULT: UserDefaults = UserDefaults {};
+    pub const DEFAULT: Default = Default {};
 
     pub async fn create(pool: &SqlitePool, username: &str, password_hash: &str, created_at: OffsetDateTime) -> Result<i64> {
         let result = sqlx::query!(
@@ -67,7 +68,7 @@ impl User {
         Ok(result.user_id)
     }
 
-    pub async fn get(pool: &SqlitePool, user_id: i64) -> Result<User> {
+    pub async fn get(pool: &SqlitePool, user_id: i64) -> Result<Self> {
         sqlx::query_as!(
             User,
             r#"
@@ -81,7 +82,7 @@ impl User {
         .await
     }
 
-    pub async fn get_using_username(pool: &SqlitePool, username: &str) -> Result<User> {
+    pub async fn get_using_username(pool: &SqlitePool, username: &str) -> Result<Self> {
         sqlx::query_as!(
             User,
             r#"
@@ -130,8 +131,8 @@ impl User {
         Ok(rows_affected > 0)
     }
 
-    pub fn to_redacted_clone(&self) -> User {
-        User {
+    #[must_use] pub fn to_redacted_clone(&self) -> Self {
+        Self {
             user_id: self.user_id,
             username: self.username.clone(),
             password_hash: "[redacted]".to_string(),
@@ -184,7 +185,7 @@ mod tests {
         assert_eq!(test_user.user_id, user_id);
         assert_eq!(test_user.username, "piotrpdev");
         assert_eq!(test_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
-        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
         
         Ok(())
     }
@@ -198,7 +199,7 @@ mod tests {
         assert_eq!(test_user.user_id, 2);
         assert_eq!(test_user.username, username);
         assert_eq!(test_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
-        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
         
         Ok(())
     }
@@ -208,7 +209,7 @@ mod tests {
         let user_id = 2;
         let username = "new_joedaly";
         let password_hash = "new_hash";
-        let created_at = OffsetDateTime::from_unix_timestamp(1729530138)?;
+        let created_at = OffsetDateTime::from_unix_timestamp(1_729_530_138)?;
 
         let updated = User::update(&pool, user_id, username, password_hash, created_at).await?;
         
@@ -248,7 +249,7 @@ mod tests {
         assert_eq!(redacted_user.user_id, user_id);
         assert_eq!(redacted_user.username, "piotrpdev");
         assert_eq!(redacted_user.password_hash, "[redacted]");
-        assert_eq!(redacted_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        assert_eq!(redacted_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
         
         Ok(())
     }

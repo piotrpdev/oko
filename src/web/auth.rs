@@ -33,7 +33,7 @@ pub fn router() -> Router<()> {
 }
 
 mod post {
-    use super::*;
+    use super::{AuthSession, Credentials, Form, IntoResponse, Messages, Redirect, StatusCode};
 
     pub async fn login(
         mut auth_session: AuthSession,
@@ -47,7 +47,7 @@ mod post {
 
                 let mut login_url = "/login".to_string();
                 if let Some(next) = creds.next {
-                    login_url = format!("{}?next={}", login_url, next);
+                    login_url = format!("{login_url}?next={next}");
                 };
 
                 return Redirect::to(&login_url).into_response();
@@ -61,17 +61,13 @@ mod post {
 
         messages.success(format!("Successfully logged in as {}", user.username));
 
-        if let Some(ref next) = creds.next {
-            Redirect::to(next)
-        } else {
-            Redirect::to("/")
-        }
+        creds.next.as_ref().map_or_else(|| Redirect::to("/"), |next| Redirect::to(next))
         .into_response()
     }
 }
 
 mod get {
-    use super::*;
+    use super::{AuthSession, IntoResponse, LoginTemplate, Messages, NextUrl, Query, Redirect, StatusCode};
 
     pub async fn login(
         messages: Messages,

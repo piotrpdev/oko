@@ -28,7 +28,7 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let sqlite_connect_options =
             SqliteConnectOptions::from_str("sqlite://data.db")?
                 .create_if_missing(true);
@@ -40,7 +40,7 @@ impl App {
         Ok(Self { db })
     }
 
-    pub async fn serve(self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Session layer.
         //
         // This uses `tower-sessions` to establish a layer that will provide the session
@@ -108,8 +108,8 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => { deletion_task_abort_handle.abort() },
-        _ = terminate => { deletion_task_abort_handle.abort() },
+        () = ctrl_c => { deletion_task_abort_handle.abort() },
+        () = terminate => { deletion_task_abort_handle.abort() },
     }
 }
 
