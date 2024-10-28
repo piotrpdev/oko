@@ -10,7 +10,6 @@ pub struct CameraPermission {
     pub can_control: bool,
 }
 
-#[allow(dead_code)]
 impl CameraPermission {
     pub async fn create(
         pool: &SqlitePool,

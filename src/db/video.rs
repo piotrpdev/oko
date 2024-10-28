@@ -14,7 +14,6 @@ pub struct Video {
     pub file_size: Option<i64>,
 }
 
-#[allow(dead_code)]
 impl Video {
     pub async fn create(
         pool: &SqlitePool,

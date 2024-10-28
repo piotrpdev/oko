@@ -13,7 +13,6 @@ pub struct CameraSetting {
     pub modified_by: Option<i64>,
 }
 
-#[allow(dead_code)]
 impl CameraSetting {
     pub async fn create(
         pool: &SqlitePool,

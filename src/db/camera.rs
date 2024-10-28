@@ -13,7 +13,6 @@ pub struct Camera {
     pub is_active: bool,
 }
 
-#[allow(dead_code)]
 impl Camera {
     pub async fn create(
         pool: &SqlitePool,

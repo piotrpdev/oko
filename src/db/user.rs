@@ -39,7 +39,6 @@ impl AuthUser for User {
     }
 }
 
-#[allow(dead_code)]
 impl User {
     pub async fn create(pool: &SqlitePool, username: &str, password_hash: &str) -> Result<i64> {
         let result = sqlx::query!(
