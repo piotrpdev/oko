@@ -48,7 +48,7 @@ impl App {
         let session_store = SqliteStore::new(self.db.clone());
         session_store.migrate().await?;
 
-        let deletion_task = tokio::task::spawn(
+        let deletion_task = tokio::spawn(
             session_store
                 .clone()
                 .continuously_delete_expired(tokio::time::Duration::from_secs(60)),
@@ -76,7 +76,7 @@ impl App {
             .layer(MessagesManagerLayer)
             .layer(auth_layer);
 
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 
         // Ensure we use a shutdown signal to abort the deletion task.
         axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
@@ -91,17 +91,20 @@ impl App {
 
 async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        signal::ctrl_c().await.unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "Failed to install Ctrl+C handler");
+        });
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
+        let signal_result = signal::unix::signal(signal::unix::SignalKind::terminate());
+        match signal_result {
+            Ok(mut s) => {
+                s.recv().await;
+            }
+            Err(e) => tracing::warn!(error = %e, "Failed to install Unix SIGTERM signal handler"),
+        }
     };
 
     #[cfg(not(unix))]

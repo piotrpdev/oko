@@ -34,6 +34,7 @@ tower-sessions-sqlx-store = { version = "0.14.0", features = ["sqlite"] }
 thiserror = "1.0.56"
 serde_json = "1.0.132"
 chrono = { version = "0.4.38", features = ["serde"] }
+tracing = "0.1.40"
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -48,8 +49,8 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 redundant_pub_crate = "warn"
-unwrap_used = "allow"
-expect_used = "allow"
+unwrap_used = "warn"
+expect_used = "warn"
 panic = "deny"
 unreachable = "deny"
 todo = "deny"

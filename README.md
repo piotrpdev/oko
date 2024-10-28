@@ -41,6 +41,12 @@ python3 -m http.server
 xdg-open http://localhost:8000/tarpaulin-report.html
 ```
 
+### Lint
+
+```bash
+cargo clippy --all-targets
+```
+
 ## License
 
 This project is licensed under the [GNU GPL v3.0][license].

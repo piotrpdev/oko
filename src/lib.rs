@@ -17,6 +17,8 @@ pub use {
 };
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // TODO: Improve this, log to file, etc.
+    // TODO: Use tracing wherever '?' is used.
     tracing_subscriber::registry()
         .with(EnvFilter::new(std::env::var("RUST_LOG").unwrap_or_else(
             |_| "axum_login=debug,tower_sessions=debug,sqlx=warn,tower_http=debug".into(),
@@ -24,6 +26,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with(tracing_subscriber::fmt::layer())
         .try_init()?;
 
+    // TODO: Properly handle errors.
     App::new().await?.serve().await?;
 
     Ok(())
