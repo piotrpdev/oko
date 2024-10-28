@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS cameras (
@@ -10,15 +10,15 @@ CREATE TABLE IF NOT EXISTS cameras (
     name TEXT NOT NULL,
     ip_address TEXT,
     last_connected TIMESTAMP,
-    is_active BOOLEAN NOT NULL DEFAULT true
+    is_active BOOLEAN NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS camera_permissions (
     permission_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
-    can_view BOOLEAN NOT NULL DEFAULT true,
-    can_control BOOLEAN NOT NULL DEFAULT false,
+    can_view BOOLEAN NOT NULL,
+    can_control BOOLEAN NOT NULL,
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
@@ -36,10 +36,10 @@ CREATE TABLE IF NOT EXISTS videos (
 CREATE TABLE IF NOT EXISTS camera_settings (
     setting_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER NOT NULL,
-    flashlight_enabled BOOLEAN NOT NULL DEFAULT false,
+    flashlight_enabled BOOLEAN NOT NULL,
     resolution TEXT NOT NULL,
     framerate INTEGER NOT NULL,
-    last_modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_modified TIMESTAMP NOT NULL,
     modified_by INTEGER,
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE,
     FOREIGN KEY (modified_by) REFERENCES users(user_id) ON DELETE SET NULL

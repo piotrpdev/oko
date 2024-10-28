@@ -39,16 +39,27 @@ impl AuthUser for User {
     }
 }
 
+pub struct UserDefaults {}
+
+impl UserDefaults {
+    pub fn created_at(&self) -> OffsetDateTime {
+        OffsetDateTime::now_utc()
+    }
+}
+
 impl User {
-    pub async fn create(pool: &SqlitePool, username: &str, password_hash: &str) -> Result<i64> {
+    pub const DEFAULT: UserDefaults = UserDefaults {};
+
+    pub async fn create(pool: &SqlitePool, username: &str, password_hash: &str, created_at: OffsetDateTime) -> Result<i64> {
         let result = sqlx::query!(
             r#"
-            INSERT INTO users (username, password_hash)
-            VALUES (?, ?)
+            INSERT INTO users (username, password_hash, created_at)
+            VALUES (?, ?, ?)
             RETURNING user_id
             "#,
             username,
-            password_hash
+            password_hash,
+            created_at
         )
         .fetch_one(pool)
         .await?;
@@ -84,15 +95,16 @@ impl User {
         .await
     }
 
-    pub async fn update(pool: &SqlitePool, user_id: i64, username: &str, password_hash: &str) -> Result<bool> {
+    pub async fn update(pool: &SqlitePool, user_id: i64, username: &str, password_hash: &str, created_at: OffsetDateTime) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
             UPDATE users
-            SET username = ?, password_hash = ?
+            SET username = ?, password_hash = ?, created_at = ?
             WHERE user_id = ?
             "#,
             username,
             password_hash,
+            created_at,
             user_id
         )
         .execute(pool)
@@ -136,8 +148,9 @@ mod tests {
     async fn create(pool: SqlitePool) -> Result<()> {
         let username = "test_user";
         let password_hash = "test_hash";
+        let created_at = User::DEFAULT.created_at();
 
-        let test_user_id = User::create(&pool, username, password_hash).await?;
+        let test_user_id = User::create(&pool, username, password_hash, created_at).await?;
         
         assert_eq!(test_user_id, 4);
 
@@ -145,6 +158,7 @@ mod tests {
 
         assert_eq!(test_user.username, username);
         assert_eq!(test_user.password_hash, password_hash);
+        assert_eq!(test_user.created_at, created_at);
         
         Ok(())
     }
@@ -153,8 +167,9 @@ mod tests {
     async fn create_existing(pool: SqlitePool) -> Result<()> {
         let username = "piotrpdev";
         let password_hash = "test_hash";
+        let created_at = User::DEFAULT.created_at();
 
-        let test_user_id = User::create(&pool, username, password_hash).await;
+        let test_user_id = User::create(&pool, username, password_hash, created_at).await;
 
         assert!(test_user_id.is_err());
 
@@ -193,8 +208,9 @@ mod tests {
         let user_id = 2;
         let username = "new_joedaly";
         let password_hash = "new_hash";
+        let created_at = OffsetDateTime::from_unix_timestamp(1729530138)?;
 
-        let updated = User::update(&pool, user_id, username, password_hash).await?;
+        let updated = User::update(&pool, user_id, username, password_hash, created_at).await?;
         
         assert!(updated);
 
@@ -203,7 +219,7 @@ mod tests {
         assert_eq!(test_user.user_id, user_id);
         assert_eq!(test_user.username, username);
         assert_eq!(test_user.password_hash, password_hash);
-        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1729530138)?);
+        assert_eq!(test_user.created_at, created_at);
         
         Ok(())
     }

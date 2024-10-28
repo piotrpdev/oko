@@ -13,20 +13,36 @@ pub struct Camera {
     pub is_active: bool,
 }
 
+pub struct CameraDefaults {
+    pub ip_address: Option<String>,
+    pub last_connected: Option<OffsetDateTime>,
+    pub is_active: bool
+}
+
 impl Camera {
+    pub const DEFAULT: CameraDefaults = CameraDefaults {
+        ip_address: None,
+        last_connected: None,
+        is_active: true
+    };
+
     pub async fn create(
         pool: &SqlitePool,
         name: &str,
         ip_address: Option<&str>,
+        last_connected: Option<OffsetDateTime>,
+        is_active: bool
     ) -> Result<i64> {
         let result = sqlx::query!(
             r#"
-            INSERT INTO cameras (name, ip_address)
-            VALUES (?, ?)
+            INSERT INTO cameras (name, ip_address, last_connected, is_active)
+            VALUES (?, ?, ?, ?)
             RETURNING camera_id
             "#,
             name,
-            ip_address
+            ip_address,
+            last_connected,
+            is_active
         )
         .fetch_one(pool)
         .await?;
@@ -53,16 +69,18 @@ impl Camera {
         camera_id: i64,
         name: &str,
         ip_address: Option<&str>,
+        last_connected: Option<OffsetDateTime>,
         is_active: bool,
     ) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
             UPDATE cameras
-            SET name = ?, ip_address = ?, is_active = ?
+            SET name = ?, ip_address = ?, last_connected = ?, is_active = ?
             WHERE camera_id = ?
             "#,
             name,
             ip_address,
+            last_connected,
             is_active,
             camera_id
         )
@@ -108,9 +126,11 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn create(pool: SqlitePool) -> Result<()> {
         let camera_name = "Test Camera";
-        let ip_address: std::option::Option<std::string::String> = None;
+        let ip_address = Camera::DEFAULT.ip_address;
+        let last_connected = Camera::DEFAULT.last_connected;
+        let is_active = Camera::DEFAULT.is_active;
         
-        let camera_id = Camera::create(&pool, camera_name, ip_address.as_deref()).await?;
+        let camera_id = Camera::create(&pool, camera_name, ip_address.as_deref(), last_connected, is_active).await?;
 
         assert_eq!(camera_id, 3);
 
@@ -118,6 +138,7 @@ mod tests {
 
         assert_eq!(camera.name, camera_name);
         assert_eq!(camera.ip_address, ip_address);
+        assert_eq!(camera.last_connected, last_connected);
         assert!(camera.is_active);
 
         Ok(())
@@ -138,13 +159,14 @@ mod tests {
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
-    async fn update(pool: SqlitePool) -> Result<()> {
+    async fn update(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let camera_id = 1;
         let camera_name = "Updated Camera";
-        let ip_address: std::option::Option<std::string::String> = Some("192.168.0.24".to_string());
+        let ip_address = Some("192.168.0.24".to_string());
+        let last_connected = Some(time::OffsetDateTime::from_unix_timestamp(1729443378)?);
         let is_active = false;
 
-        let updated = Camera::update(&pool, camera_id, camera_name, ip_address.as_deref(), is_active).await?;
+        let updated = Camera::update(&pool, camera_id, camera_name, ip_address.as_deref(), last_connected, is_active).await?;
 
         assert!(updated);
 
@@ -152,6 +174,7 @@ mod tests {
 
         assert_eq!(camera.name, camera_name);
         assert_eq!(camera.ip_address, ip_address);
+        assert_eq!(camera.last_connected, last_connected);
         assert!(!camera.is_active);
 
         Ok(())

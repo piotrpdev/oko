@@ -10,7 +10,17 @@ pub struct CameraPermission {
     pub can_control: bool,
 }
 
+pub struct CameraPermissionDefaults {
+    pub can_view: bool,
+    pub can_control: bool
+}
+
 impl CameraPermission {
+    pub const DEFAULT: CameraPermissionDefaults = CameraPermissionDefaults {
+        can_view: true,
+        can_control: false
+    };
+
     pub async fn create(
         pool: &SqlitePool,
         camera_id: i64,
