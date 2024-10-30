@@ -31,10 +31,10 @@ impl Model for Camera {
         is_active: true
     };
 
-    async fn create(
+    async fn create_using_self(
         &mut self,
         pool: &SqlitePool
-    ) -> Result<i64> {
+    ) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO cameras (name, ip_address, last_connected, is_active)
@@ -51,7 +51,7 @@ impl Model for Camera {
 
         self.camera_id = result.camera_id;
 
-        Ok(self.camera_id)
+        Ok(())
     }
 
     async fn get_using_id(pool: &SqlitePool, camera_id: i64) -> Result<Self> {
@@ -68,15 +68,16 @@ impl Model for Camera {
         .await
     }
 
-    async fn update(
+    async fn update_using_self(
         &self,
         pool: &SqlitePool
-    ) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    ) -> Result<()> {
+        sqlx::query!(
             r#"
             UPDATE cameras
             SET name = ?, ip_address = ?, last_connected = ?, is_active = ?
             WHERE camera_id = ?
+            RETURNING camera_id
             "#,
             self.name,
             self.ip_address,
@@ -84,20 +85,26 @@ impl Model for Camera {
             self.is_active,
             self.camera_id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 
-    async fn delete_using_id(pool: &SqlitePool, camera_id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!("DELETE FROM cameras WHERE camera_id = ?", camera_id)
-            .execute(pool)
-            .await?
-            .rows_affected();
+    async fn delete_using_id(pool: &SqlitePool, camera_id: i64) -> Result<()> {
+        sqlx::query!(
+            r#"
+            DELETE
+            FROM cameras
+            WHERE camera_id = ?
+            RETURNING camera_id
+            "#,
+            camera_id
+        )
+        .fetch_one(pool)
+        .await?;
 
-            Ok(rows_affected > 0)
+        Ok(())
     }
 }
 
@@ -136,11 +143,11 @@ mod tests {
             is_active: Camera::DEFAULT.is_active
         };
         
-        let camera_id = camera.create(&pool).await?;
+        camera.create_using_self(&pool).await?;
 
-        assert_eq!(camera_id, 3);
+        assert_eq!(camera.camera_id, 3);
 
-        let returned_camera = Camera::get_using_id(&pool, camera_id).await?;
+        let returned_camera = Camera::get_using_id(&pool, camera.camera_id).await?;
 
         assert_eq!(returned_camera.name, camera.name);
         assert_eq!(returned_camera.ip_address, camera.ip_address);
@@ -176,9 +183,9 @@ mod tests {
             is_active: false
         };
 
-        let updated = updated_camera.update(&pool).await?;
+        let updated = updated_camera.update_using_self(&pool).await;
 
-        assert!(updated);
+        assert!(updated.is_ok());
 
         let returned_camera = Camera::get_using_id(&pool, old_camera.camera_id).await?;
 
@@ -193,13 +200,17 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
-        let deleted = Camera::delete_using_id(&pool, camera_id).await?;
+        let deleted = Camera::delete_using_id(&pool, camera_id).await;
 
-        assert!(deleted);
+        assert!(deleted.is_ok());
 
         let returned_camera_result = Camera::get_using_id(&pool, camera_id).await;
 
         assert!(returned_camera_result.is_err());
+
+        let impossible_deleted = Camera::delete_using_id(&pool, camera_id).await;
+
+        assert!(impossible_deleted.is_err());
 
         Ok(())
     }

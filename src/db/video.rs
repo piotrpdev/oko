@@ -34,10 +34,10 @@ impl Model for Video {
         end_time: None
     };
 
-    async fn create(
+    async fn create_using_self(
         &mut self,
         pool: &SqlitePool
-    ) -> Result<i64> {
+    ) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO videos (camera_id, file_path, start_time, end_time, file_size)
@@ -55,7 +55,7 @@ impl Model for Video {
 
         self.video_id = result.video_id;
 
-        Ok(self.video_id)
+        Ok(())
     }
 
     async fn get_using_id(pool: &SqlitePool, id: i64) -> Result<Self> {
@@ -71,42 +71,42 @@ impl Model for Video {
         .await
     }
 
-    async fn update(
+    async fn update_using_self(
         &self,
         pool: &SqlitePool
-    ) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    ) -> Result<()> {
+        sqlx::query!(
             r#"
             UPDATE videos
             SET camera_id = ?, end_time = ?, file_size = ?
             WHERE video_id = ?
+            RETURNING video_id
             "#,
             self.camera_id,
             self.end_time,
             self.file_size,
             self.video_id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 
-    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<()> {
+        sqlx::query!(
             r#"
             DELETE
             FROM videos
             WHERE video_id = ?
+            RETURNING video_id
             "#,
             id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 }
 
@@ -133,8 +133,6 @@ impl Video {
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
-    use crate::db::camera;
-
     use super::*;
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
@@ -148,7 +146,7 @@ mod tests {
             file_size: Some(1024)
         };
 
-        video.create(&pool).await?;
+        video.create_using_self(&pool).await?;
 
         assert_eq!(video.video_id, 3);
 
@@ -190,8 +188,8 @@ mod tests {
             file_size: Some(2048)
         };
 
-        let updated = updated_video.update(&pool).await?;
-        assert!(updated);
+        let updated = updated_video.update_using_self(&pool).await;
+        assert!(updated.is_ok());
 
         let returned_video = Video::get_using_id(&pool, old_video.video_id).await?;
         assert_eq!(returned_video.camera_id, updated_video.camera_id);
@@ -206,11 +204,15 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let video_id = 1;
-        let deleted = Video::delete_using_id(&pool, video_id).await?;
-        assert!(deleted);
+        let deleted = Video::delete_using_id(&pool, video_id).await;
+        assert!(deleted.is_ok());
 
         let returned_video_result = Video::get_using_id(&pool, video_id).await;
         assert!(returned_video_result.is_err());
+
+        let impossible_deleted = Video::delete_using_id(&pool, video_id).await;
+
+        assert!(impossible_deleted.is_err());
 
         Ok(())
     }

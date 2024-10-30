@@ -59,7 +59,7 @@ impl Model for User {
         user_id: -1
     };
 
-    async fn create(&mut self, pool: &SqlitePool) -> Result<i64> {
+    async fn create_using_self(&mut self, pool: &SqlitePool) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO users (username, password_hash, created_at)
@@ -75,7 +75,7 @@ impl Model for User {
 
         self.user_id = result.user_id;
         
-        Ok(self.user_id)
+        Ok(())
     }
 
     async fn get_using_id(pool: &SqlitePool, id: i64) -> Result<Self> {
@@ -92,39 +92,39 @@ impl Model for User {
         .await
     }
 
-    async fn update(&self, pool: &SqlitePool) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    async fn update_using_self(&self, pool: &SqlitePool) -> Result<()> {
+        sqlx::query!(
             r#"
             UPDATE users
             SET username = ?, password_hash = ?, created_at = ?
             WHERE user_id = ?
+            RETURNING user_id
             "#,
             self.username,
             self.password_hash,
             self.created_at,
             self.user_id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 
-    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<()> {
+        sqlx::query!(
             r#"
             DELETE
             FROM users
             WHERE user_id = ?
+            RETURNING user_id
             "#,
             id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 }
 
@@ -166,7 +166,7 @@ mod tests {
             created_at: User::DEFAULT.created_at(),
         };
 
-        user.create(&pool).await?;
+        user.create_using_self(&pool).await?;
         
         assert_eq!(user.user_id, 4);
 
@@ -188,7 +188,7 @@ mod tests {
             created_at: User::DEFAULT.created_at(),
         };
 
-        let returned_user_result = user.create(&pool).await;
+        let returned_user_result = user.create_using_self(&pool).await;
 
         assert!(returned_user_result.is_err());
 
@@ -233,9 +233,9 @@ mod tests {
             created_at: OffsetDateTime::from_unix_timestamp(1_729_530_138)?,
         };
 
-        let updated = updated_user.update(&pool).await?;
+        let updated = updated_user.update_using_self(&pool).await;
         
-        assert!(updated);
+        assert!(updated.is_ok());
 
         let returned_user = User::get_using_id(&pool, old_user.user_id).await?;
 
@@ -250,13 +250,17 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let user_id = 2;
-        let deleted = User::delete_using_id(&pool, user_id).await?;
+        let deleted = User::delete_using_id(&pool, user_id).await;
         
-        assert!(deleted);
+        assert!(deleted.is_ok());
 
         let returned_user = User::get_using_id(&pool, user_id).await;
 
         assert!(returned_user.is_err());
+
+        let impossible_deleted = User::delete_using_id(&pool, user_id).await;
+
+        assert!(impossible_deleted.is_err());
         
         Ok(())
     }

@@ -34,10 +34,10 @@ impl Model for CameraSetting {
         flashlight_enabled: false
     };
 
-    async fn create(
+    async fn create_using_self(
         &mut self,
         pool: &SqlitePool
-    ) -> Result<i64> {
+    ) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO camera_settings 
@@ -57,7 +57,7 @@ impl Model for CameraSetting {
 
         self.setting_id = result.setting_id;
 
-        Ok(self.setting_id)
+        Ok(())
     }
 
     async fn get_using_id(
@@ -77,17 +77,18 @@ impl Model for CameraSetting {
         .await
     }
 
-    async fn update(
+    async fn update_using_self(
         &self,
         pool: &SqlitePool
-    ) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    ) -> Result<()> {
+        sqlx::query!(
             r#"
             UPDATE camera_settings
             SET flashlight_enabled = ?, resolution = ?, 
                 framerate = ?, last_modified = ?,
                 modified_by = ?
             WHERE setting_id = ?
+            RETURNING setting_id
             "#,
             self.flashlight_enabled,
             self.resolution,
@@ -96,27 +97,26 @@ impl Model for CameraSetting {
             self.modified_by,
             self.setting_id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 
-    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<()> {
+        sqlx::query!(
             r#"
             DELETE
             FROM camera_settings
             WHERE setting_id = ?
+            RETURNING setting_id
             "#,
             id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
-    
-        Ok(rows_affected > 0)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(())
     }
 }
 
@@ -136,11 +136,11 @@ mod tests {
             modified_by: Some(1),
         };
 
-        let setting_id = camera_setting.create(&pool).await?;
+        camera_setting.create_using_self(&pool).await?;
 
         assert_eq!(camera_setting.setting_id, 3);
         
-        let returned_setting = CameraSetting::get_using_id(&pool, setting_id).await?;
+        let returned_setting = CameraSetting::get_using_id(&pool, camera_setting.setting_id).await?;
 
         assert_eq!(returned_setting.camera_id, camera_setting.camera_id);
         assert_eq!(returned_setting.flashlight_enabled, camera_setting.flashlight_enabled);
@@ -183,9 +183,9 @@ mod tests {
             modified_by: Some(1),
         };
 
-        let updated = new_camera_setting.update(&pool).await?;
+        let updated = new_camera_setting.update_using_self(&pool).await;
 
-        assert!(updated);
+        assert!(updated.is_ok());
 
         let returned_setting = CameraSetting::get_using_id(&pool, old_camera_setting.setting_id).await?;
         assert_eq!(returned_setting.camera_id, 1);
@@ -202,11 +202,14 @@ mod tests {
     async fn delete(pool: SqlitePool) -> Result<()> {
         let setting_id = 1;
 
-        let deleted = CameraSetting::delete_using_id(&pool, setting_id).await?;
-        assert!(deleted);
+        let deleted = CameraSetting::delete_using_id(&pool, setting_id).await;
+        assert!(deleted.is_ok());
 
         let returned_setting_result = CameraSetting::get_using_id(&pool, setting_id).await;
         assert!(returned_setting_result.is_err());
+
+        let impossible_deleted = CameraSetting::delete_using_id(&pool, setting_id).await;
+        assert!(impossible_deleted.is_err());
 
         Ok(())
     }

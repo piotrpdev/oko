@@ -26,10 +26,10 @@ impl Model for CameraPermission {
         can_control: false
     };
 
-    async fn create(
+    async fn create_using_self(
         &mut self,
         pool: &SqlitePool
-    ) -> Result<i64> {
+    ) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO camera_permissions (camera_id, user_id, can_view, can_control)
@@ -46,7 +46,7 @@ impl Model for CameraPermission {
 
         self.permission_id = result.permission_id;
 
-        Ok(self.permission_id)
+        Ok(())
     }
 
     async fn get_using_id(
@@ -66,39 +66,41 @@ impl Model for CameraPermission {
         .await
     }
 
-    async fn update(
+    async fn update_using_self(
         &self,
         pool: &SqlitePool
-    ) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    ) -> Result<()> {
+        sqlx::query!(
             r#"
             UPDATE camera_permissions
             SET can_view = ?, can_control = ?
             WHERE permission_id = ?
+            RETURNING permission_id
             "#,
             self.can_view,
             self.can_control,
             self.permission_id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 
-    async fn delete_using_id(pool: &SqlitePool, permission_id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!(
-            "DELETE
+    async fn delete_using_id(pool: &SqlitePool, permission_id: i64) -> Result<()> {
+        sqlx::query!(
+            r#"
+            DELETE
             FROM camera_permissions
-            WHERE permission_id = ?",
+            WHERE permission_id = ?
+            RETURNING permission_id
+            "#,
             permission_id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
 }
 
@@ -116,11 +118,11 @@ mod tests {
             can_control: false,
         };
 
-        let permission_id = camera_permission.create(&pool).await?;
+        camera_permission.create_using_self(&pool).await?;
 
         assert_eq!(camera_permission.permission_id, 7);
 
-        let returned_permission = CameraPermission::get_using_id(&pool, permission_id).await?;
+        let returned_permission = CameraPermission::get_using_id(&pool, camera_permission.permission_id).await?;
 
         assert_eq!(returned_permission.camera_id, camera_permission.camera_id);
         assert_eq!(returned_permission.user_id, camera_permission.user_id);
@@ -157,9 +159,9 @@ mod tests {
             can_control: true,
         };
 
-        let updated = new_camera_permission.update(&pool).await?;
+        let updated = new_camera_permission.update_using_self(&pool).await;
 
-        assert!(updated);
+        assert!(updated.is_ok());
 
         let returned_permission = CameraPermission::get_using_id(&pool, old_camera_permission.permission_id).await?;
 
@@ -175,13 +177,17 @@ mod tests {
     async fn delete(pool: SqlitePool) -> Result<()> {
         let permission_id = 1;
 
-        let deleted = CameraPermission::delete_using_id(&pool, permission_id).await?;
+        let deleted = CameraPermission::delete_using_id(&pool, permission_id).await;
 
-        assert!(deleted);
+        assert!(deleted.is_ok());
 
         let returned_permission = CameraPermission::get_using_id(&pool, permission_id).await;
 
         assert!(returned_permission.is_err());
+
+        let impossible_deleted = CameraPermission::delete_using_id(&pool, permission_id).await;
+
+        assert!(impossible_deleted.is_err());
 
         Ok(())
     }

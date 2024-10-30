@@ -17,8 +17,8 @@ async fn camera_on_delete(pool: SqlitePool) -> Result<()> {
     let setting = CameraSetting::get_using_id(&pool, setting_id).await?;
     assert_eq!(setting.camera_id, camera_id);
 
-    let deleted = Camera::delete_using_id(&pool, camera_id).await?;
-    assert!(deleted);
+    let deleted = Camera::delete_using_id(&pool, camera_id).await;
+    assert!(deleted.is_ok());
 
     let permission = CameraPermission::get_using_id(&pool, permission_id).await;
     assert!(permission.is_err());
@@ -47,8 +47,8 @@ async fn user_on_delete(pool: SqlitePool) -> Result<()> {
     assert_eq!(setting.camera_id, camera_id);
     assert_eq!(setting.modified_by, Some(user_id));
 
-    let deleted = User::delete_using_id(&pool, user_id).await?;
-    assert!(deleted);
+    let deleted = User::delete_using_id(&pool, user_id).await;
+    assert!(deleted.is_ok());
 
     let permission = CameraPermission::get_using_id(&pool, permission_id).await;
     assert!(permission.is_err());
