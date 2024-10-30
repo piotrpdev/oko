@@ -1,14 +1,14 @@
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE CHECK(LENGTH(username) <= 256),
+    password_hash TEXT NOT NULL CHECK(LENGTH(password_hash) <= 256),
     created_at TIMESTAMP NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS cameras (
     camera_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    ip_address TEXT,
+    name TEXT NOT NULL CHECK(LENGTH(name) <= 256),
+    ip_address TEXT CHECK(ip_address IS NULL OR LENGTH(ip_address) <= 64),
     last_connected TIMESTAMP,
     is_active BOOLEAN NOT NULL
 );
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS camera_permissions (
 CREATE TABLE IF NOT EXISTS videos (
     video_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER,
-    file_path TEXT NOT NULL,
+    file_path TEXT NOT NULL CHECK(LENGTH(file_path) <= 4096),
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP,
     file_size INTEGER,
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS camera_settings (
     setting_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER NOT NULL,
     flashlight_enabled BOOLEAN NOT NULL,
-    resolution TEXT NOT NULL,
-    framerate INTEGER NOT NULL,
+    resolution TEXT NOT NULL CHECK(LENGTH(resolution) <= 20),
+    framerate INTEGER NOT NULL CHECK(framerate <= 256),
     last_modified TIMESTAMP NOT NULL,
     modified_by INTEGER,
     FOREIGN KEY (camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE,
