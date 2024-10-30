@@ -4,6 +4,8 @@ use time::OffsetDateTime;
 
 use crate::db::VideoCameraView;
 
+use super::Model;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Video {
     pub video_id: i64,
@@ -15,6 +17,7 @@ pub struct Video {
 }
 
 pub struct Default {
+    pub video_id: i64,
     pub end_time: Option<OffsetDateTime>
 }
 
@@ -24,18 +27,16 @@ impl Default {
     }
 }
 
-impl Video {
-    pub const DEFAULT: Default = Default {
+impl Model for Video {
+    type Default = Default;
+    const DEFAULT: Default = Default {
+        video_id: -1,
         end_time: None
     };
 
-    pub async fn create(
-        pool: &SqlitePool,
-        camera_id: Option<i64>,
-        file_path: &str,
-        start_time: OffsetDateTime,
-        end_time: Option<OffsetDateTime>,
-        file_size: Option<i64>,
+    async fn create(
+        &mut self,
+        pool: &SqlitePool
     ) -> Result<i64> {
         let result = sqlx::query!(
             r#"
@@ -43,37 +44,36 @@ impl Video {
             VALUES (?, ?, ?, ?, ?)
             RETURNING video_id
             "#,
-            camera_id,
-            file_path,
-            start_time,
-            end_time,
-            file_size
+            self.camera_id,
+            self.file_path,
+            self.start_time,
+            self.end_time,
+            self.file_size
         )
         .fetch_one(pool)
         .await?;
 
-        Ok(result.video_id)
+        self.video_id = result.video_id;
+
+        Ok(self.video_id)
     }
 
-    pub async fn get(pool: &SqlitePool, video_id: i64) -> Result<Self> {
+    async fn get_using_id(pool: &SqlitePool, id: i64) -> Result<Self> {
         sqlx::query_as!(
             Video,
             r#"
             SELECT video_id, camera_id, file_path, start_time, end_time, file_size
             FROM videos WHERE video_id = ?
             "#,
-            video_id
+            id
         )
         .fetch_one(pool)
         .await
     }
 
-    pub async fn update(
-        pool: &SqlitePool,
-        camera_id: Option<i64>,
-        video_id: i64,
-        end_time: Option<OffsetDateTime>,
-        file_size: Option<i64>,
+    async fn update(
+        &self,
+        pool: &SqlitePool
     ) -> Result<bool> {
         let rows_affected = sqlx::query!(
             r#"
@@ -81,10 +81,10 @@ impl Video {
             SET camera_id = ?, end_time = ?, file_size = ?
             WHERE video_id = ?
             "#,
-            camera_id,
-            end_time,
-            file_size,
-            video_id
+            self.camera_id,
+            self.end_time,
+            self.file_size,
+            self.video_id
         )
         .execute(pool)
         .await?
@@ -93,15 +93,24 @@ impl Video {
         Ok(rows_affected > 0)
     }
 
-    pub async fn delete(pool: &SqlitePool, video_id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!("DELETE FROM videos WHERE video_id = ?", video_id)
-            .execute(pool)
-            .await?
-            .rows_affected();
+    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<bool> {
+        let rows_affected = sqlx::query!(
+            r#"
+            DELETE
+            FROM videos
+            WHERE video_id = ?
+            "#,
+            id
+        )
+        .execute(pool)
+        .await?
+        .rows_affected();
 
         Ok(rows_affected > 0)
     }
+}
 
+impl Video {
     pub async fn list_for_camera(
         db: &sqlx::Pool<sqlx::Sqlite>,
         camera_id: i64,
@@ -130,21 +139,26 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn create(pool: SqlitePool) -> Result<()> {
-        let camera_id = Some(1);
-        let file_path = "/path/to/video.mp4";
-        let start_time = OffsetDateTime::now_utc();
-        let end_time = Video::DEFAULT.end_time;
-        let file_size = Some(1024);
+        let mut video = Video {
+            video_id: Video::DEFAULT.video_id,
+            camera_id: Some(1),
+            file_path: "/path/to/video.mp4".to_string(),
+            start_time: OffsetDateTime::now_utc(),
+            end_time: Video::DEFAULT.end_time,
+            file_size: Some(1024)
+        };
 
-        let video_id = Video::create(&pool, camera_id, file_path, start_time, end_time, file_size)
-            .await?;
+        video.create(&pool).await?;
 
-        let video = Video::get(&pool, video_id).await?;
-        assert_eq!(video.camera_id, camera_id);
-        assert_eq!(video.file_path, file_path);
-        assert_eq!(video.start_time, start_time);
-        assert_eq!(video.end_time, end_time);
-        assert_eq!(video.file_size, file_size);
+        assert_eq!(video.video_id, 3);
+
+        let returned_video = Video::get_using_id(&pool, 3).await?;
+
+        assert_eq!(returned_video.camera_id, video.camera_id);
+        assert_eq!(returned_video.file_path, video.file_path);
+        assert_eq!(returned_video.start_time, video.start_time);
+        assert_eq!(returned_video.end_time, video.end_time);
+        assert_eq!(returned_video.file_size, video.file_size);
 
         Ok(())
     }
@@ -152,31 +166,39 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let video_id = 1;
-        let video = Video::get(&pool, video_id).await?;
+        let returned_video = Video::get_using_id(&pool, video_id).await?;
 
-        assert_eq!(video.video_id, video_id);
-        assert_eq!(video.camera_id, Some(1));
-        assert_eq!(video.file_path, "/home/piotrpdev/oko/scripts/1.mp4");
-        assert_eq!(video.start_time, OffsetDateTime::from_unix_timestamp(1_729_479_512)?);
-        assert_eq!(video.file_size, Some(6_762_403));
+        assert_eq!(returned_video.video_id, video_id);
+        assert_eq!(returned_video.camera_id, Some(1));
+        assert_eq!(returned_video.file_path, "/home/piotrpdev/oko/scripts/1.mp4");
+        assert_eq!(returned_video.start_time, OffsetDateTime::from_unix_timestamp(1_729_479_512)?);
+        assert_eq!(returned_video.file_size, Some(6_762_403));
 
         Ok(())
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn update(pool: SqlitePool) -> Result<()> {
-        let video_id = 1;
-        let camera_id = Some(1);
-        let end_time = Some(OffsetDateTime::now_utc());
-        let file_size = Some(2048);
+        let old_video = Video::get_using_id(&pool, 1).await?;
 
-        let updated = Video::update(&pool, camera_id, video_id, end_time, file_size).await?;
+        let updated_video = Video {
+            video_id: old_video.video_id,
+            camera_id: Some(1),
+            file_path: old_video.file_path,
+            start_time: old_video.start_time,
+            end_time: Some(OffsetDateTime::now_utc()),
+            file_size: Some(2048)
+        };
+
+        let updated = updated_video.update(&pool).await?;
         assert!(updated);
 
-        let video = Video::get(&pool, video_id).await?;
-        assert_eq!(video.camera_id, camera_id);
-        assert_eq!(video.end_time, end_time);
-        assert_eq!(video.file_size, file_size);
+        let returned_video = Video::get_using_id(&pool, old_video.video_id).await?;
+        assert_eq!(returned_video.camera_id, updated_video.camera_id);
+        assert_eq!(returned_video.file_path, updated_video.file_path);
+        assert_eq!(returned_video.start_time, updated_video.start_time);
+        assert_eq!(returned_video.end_time, updated_video.end_time);
+        assert_eq!(returned_video.file_size, updated_video.file_size);
 
         Ok(())
     }
@@ -184,11 +206,11 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let video_id = 1;
-        let deleted = Video::delete(&pool, video_id).await?;
+        let deleted = Video::delete_using_id(&pool, video_id).await?;
         assert!(deleted);
 
-        let video = Video::get(&pool, video_id).await;
-        assert!(video.is_err());
+        let returned_video_result = Video::get_using_id(&pool, video_id).await;
+        assert!(returned_video_result.is_err());
 
         Ok(())
     }
@@ -196,14 +218,14 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras", "videos")))]
     async fn list_for_camera(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
-        let videos = Video::list_for_camera(&pool, camera_id).await?;
+        let returned_videos = Video::list_for_camera(&pool, camera_id).await?;
 
-        assert_eq!(videos.len(), 1);
-        assert_eq!(videos.first().unwrap().video_id, 1);
-        assert_eq!(videos.first().unwrap().camera_id, Some(1));
-        assert_eq!(videos.first().unwrap().camera_name, "Front Door");
-        assert_eq!(videos.first().unwrap().file_path, "/home/piotrpdev/oko/scripts/1.mp4");
-        assert_eq!(videos.first().unwrap().file_size, Some(6_762_403));
+        assert_eq!(returned_videos.len(), 1);
+        assert_eq!(returned_videos.first().unwrap().video_id, 1);
+        assert_eq!(returned_videos.first().unwrap().camera_id, Some(1));
+        assert_eq!(returned_videos.first().unwrap().camera_name, "Front Door");
+        assert_eq!(returned_videos.first().unwrap().file_path, "/home/piotrpdev/oko/scripts/1.mp4");
+        assert_eq!(returned_videos.first().unwrap().file_size, Some(6_762_403));
 
         Ok(())
     }

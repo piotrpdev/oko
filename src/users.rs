@@ -5,7 +5,7 @@ use serde::Deserialize;
 use sqlx::SqlitePool;
 use tokio::task;
 
-use crate::db::User;
+use crate::db::{Model, User};
 
 // This allows us to extract the authentication fields from forms. We use this
 // to authenticate requests with the backend.
@@ -60,7 +60,7 @@ impl AuthnBackend for Backend {
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let user = User::get(&self.db, *user_id).await?;
+        let user = User::get_using_id(&self.db, *user_id).await?;
 
         Ok(Some(user))
     }

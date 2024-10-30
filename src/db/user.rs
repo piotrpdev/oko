@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Result, SqlitePool};
 use time::OffsetDateTime;
 
+use super::Model;
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct User {
     pub user_id: i64,
@@ -39,7 +41,10 @@ impl AuthUser for User {
     }
 }
 
-pub struct Default {}
+#[allow(dead_code)]
+pub struct Default {
+    user_id: i64
+}
 
 impl Default {
     #[allow(clippy::unused_self)]
@@ -48,27 +53,32 @@ impl Default {
     }
 }
 
-impl User {
-    pub const DEFAULT: Default = Default {};
+impl Model for User {
+    type Default = Default;
+    const DEFAULT: Default = Default {
+        user_id: -1
+    };
 
-    pub async fn create(pool: &SqlitePool, username: &str, password_hash: &str, created_at: OffsetDateTime) -> Result<i64> {
+    async fn create(&mut self, pool: &SqlitePool) -> Result<i64> {
         let result = sqlx::query!(
             r#"
             INSERT INTO users (username, password_hash, created_at)
             VALUES (?, ?, ?)
             RETURNING user_id
             "#,
-            username,
-            password_hash,
-            created_at
+            self.username,
+            self.password_hash,
+            self.created_at
         )
         .fetch_one(pool)
         .await?;
+
+        self.user_id = result.user_id;
         
-        Ok(result.user_id)
+        Ok(self.user_id)
     }
 
-    pub async fn get(pool: &SqlitePool, user_id: i64) -> Result<Self> {
+    async fn get_using_id(pool: &SqlitePool, id: i64) -> Result<Self> {
         sqlx::query_as!(
             User,
             r#"
@@ -76,12 +86,49 @@ impl User {
             FROM users
             WHERE user_id = ?
             "#,
-            user_id
+            id
         )
         .fetch_one(pool)
         .await
     }
 
+    async fn update(&self, pool: &SqlitePool) -> Result<bool> {
+        let rows_affected = sqlx::query!(
+            r#"
+            UPDATE users
+            SET username = ?, password_hash = ?, created_at = ?
+            WHERE user_id = ?
+            "#,
+            self.username,
+            self.password_hash,
+            self.created_at,
+            self.user_id
+        )
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+        Ok(rows_affected > 0)
+    }
+
+    async fn delete_using_id(pool: &SqlitePool, id: i64) -> Result<bool> {
+        let rows_affected = sqlx::query!(
+            r#"
+            DELETE
+            FROM users
+            WHERE user_id = ?
+            "#,
+            id
+        )
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+        Ok(rows_affected > 0)
+    }
+}
+
+impl User {
     pub async fn get_using_username(pool: &SqlitePool, username: &str) -> Result<Self> {
         sqlx::query_as!(
             User,
@@ -94,41 +141,6 @@ impl User {
         )
         .fetch_one(pool)
         .await
-    }
-
-    pub async fn update(pool: &SqlitePool, user_id: i64, username: &str, password_hash: &str, created_at: OffsetDateTime) -> Result<bool> {
-        let rows_affected = sqlx::query!(
-            r#"
-            UPDATE users
-            SET username = ?, password_hash = ?, created_at = ?
-            WHERE user_id = ?
-            "#,
-            username,
-            password_hash,
-            created_at,
-            user_id
-        )
-        .execute(pool)
-        .await?
-        .rows_affected();
-
-        Ok(rows_affected > 0)
-    }
-
-    pub async fn delete(pool: &SqlitePool, user_id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!(
-            r#"
-            DELETE
-            FROM users
-            WHERE user_id = ?
-            "#,
-            user_id
-        )
-        .execute(pool)
-        .await?
-        .rows_affected();
-
-        Ok(rows_affected > 0)
     }
 
     #[must_use] pub fn to_redacted_clone(&self) -> Self {
@@ -147,32 +159,38 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn create(pool: SqlitePool) -> Result<()> {
-        let username = "test_user";
-        let password_hash = "test_hash";
-        let created_at = User::DEFAULT.created_at();
+        let mut user = User {
+            user_id: User::DEFAULT.user_id,
+            username: "test_user".to_string(),
+            password_hash: "test_hash".to_string(),
+            created_at: User::DEFAULT.created_at(),
+        };
 
-        let test_user_id = User::create(&pool, username, password_hash, created_at).await?;
+        user.create(&pool).await?;
         
-        assert_eq!(test_user_id, 4);
+        assert_eq!(user.user_id, 4);
 
-        let test_user = User::get(&pool, 4).await?;
+        let returned_user = User::get_using_id(&pool, 4).await?;
 
-        assert_eq!(test_user.username, username);
-        assert_eq!(test_user.password_hash, password_hash);
-        assert_eq!(test_user.created_at, created_at);
+        assert_eq!(returned_user.username, user.username);
+        assert_eq!(returned_user.password_hash, user.password_hash);
+        assert_eq!(returned_user.created_at, user.created_at);
         
         Ok(())
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn create_existing(pool: SqlitePool) -> Result<()> {
-        let username = "piotrpdev";
-        let password_hash = "test_hash";
-        let created_at = User::DEFAULT.created_at();
+        let mut user = User {
+            user_id: User::DEFAULT.user_id,
+            username: "piotrpdev".to_string(),
+            password_hash: "test_hash".to_string(),
+            created_at: User::DEFAULT.created_at(),
+        };
 
-        let test_user_id = User::create(&pool, username, password_hash, created_at).await;
+        let returned_user_result = user.create(&pool).await;
 
-        assert!(test_user_id.is_err());
+        assert!(returned_user_result.is_err());
 
         Ok(())
     }
@@ -180,12 +198,12 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let user_id = 2;
-        let test_user = User::get(&pool, user_id).await?;
+        let returned_user = User::get_using_id(&pool, user_id).await?;
         
-        assert_eq!(test_user.user_id, user_id);
-        assert_eq!(test_user.username, "piotrpdev");
-        assert_eq!(test_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
-        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
+        assert_eq!(returned_user.user_id, user_id);
+        assert_eq!(returned_user.username, "piotrpdev");
+        assert_eq!(returned_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
+        assert_eq!(returned_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
         
         Ok(())
     }
@@ -194,33 +212,37 @@ mod tests {
     async fn get_using_username(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let username = "piotrpdev";
 
-        let test_user = User::get_using_username(&pool, username).await?;
+        let returned_user = User::get_using_username(&pool, username).await?;
         
-        assert_eq!(test_user.user_id, 2);
-        assert_eq!(test_user.username, username);
-        assert_eq!(test_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
-        assert_eq!(test_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
+        assert_eq!(returned_user.user_id, 2);
+        assert_eq!(returned_user.username, username);
+        assert_eq!(returned_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
+        assert_eq!(returned_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
         
         Ok(())
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn update(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
-        let user_id = 2;
-        let username = "new_joedaly";
-        let password_hash = "new_hash";
-        let created_at = OffsetDateTime::from_unix_timestamp(1_729_530_138)?;
+        let old_user = User::get_using_id(&pool, 2).await?;
 
-        let updated = User::update(&pool, user_id, username, password_hash, created_at).await?;
+        let updated_user = User {
+            user_id: old_user.user_id,
+            username: "new_joedaly".to_string(),
+            password_hash: old_user.password_hash,
+            created_at: OffsetDateTime::from_unix_timestamp(1_729_530_138)?,
+        };
+
+        let updated = updated_user.update(&pool).await?;
         
         assert!(updated);
 
-        let test_user = User::get(&pool, user_id).await?;
+        let returned_user = User::get_using_id(&pool, old_user.user_id).await?;
 
-        assert_eq!(test_user.user_id, user_id);
-        assert_eq!(test_user.username, username);
-        assert_eq!(test_user.password_hash, password_hash);
-        assert_eq!(test_user.created_at, created_at);
+        assert_eq!(returned_user.user_id, updated_user.user_id);
+        assert_eq!(returned_user.username, updated_user.username);
+        assert_eq!(returned_user.password_hash, updated_user.password_hash);
+        assert_eq!(returned_user.created_at, updated_user.created_at);
         
         Ok(())
     }
@@ -228,13 +250,13 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let user_id = 2;
-        let deleted = User::delete(&pool, user_id).await?;
+        let deleted = User::delete_using_id(&pool, user_id).await?;
         
         assert!(deleted);
 
-        let test_user = User::get(&pool, user_id).await;
+        let returned_user = User::get_using_id(&pool, user_id).await;
 
-        assert!(test_user.is_err());
+        assert!(returned_user.is_err());
         
         Ok(())
     }
@@ -243,8 +265,8 @@ mod tests {
     async fn to_redacted_clone(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let user_id = 2;
 
-        let test_user = User::get(&pool, user_id).await?;
-        let redacted_user = test_user.to_redacted_clone();
+        let returned_user = User::get_using_id(&pool, user_id).await?;
+        let redacted_user = returned_user.to_redacted_clone();
         
         assert_eq!(redacted_user.user_id, user_id);
         assert_eq!(redacted_user.username, "piotrpdev");
