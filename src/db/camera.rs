@@ -4,6 +4,8 @@ use time::OffsetDateTime;
 
 use crate::db::CameraPermissionView;
 
+use super::Model;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Camera {
     pub camera_id: i64,
@@ -14,43 +16,45 @@ pub struct Camera {
 }
 
 pub struct Default {
+    pub camera_id: i64,
     pub ip_address: Option<String>,
     pub last_connected: Option<OffsetDateTime>,
     pub is_active: bool
 }
 
-impl Camera {
-    pub const DEFAULT: Default = Default {
+impl Model for Camera {
+    type Default = Default;
+    const DEFAULT: Default = Default {
+        camera_id: -1,
         ip_address: None,
         last_connected: None,
         is_active: true
     };
 
-    pub async fn create(
-        pool: &SqlitePool,
-        name: &str,
-        ip_address: Option<&str>,
-        last_connected: Option<OffsetDateTime>,
-        is_active: bool
-    ) -> Result<i64> {
+    async fn create_using_self(
+        &mut self,
+        pool: &SqlitePool
+    ) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO cameras (name, ip_address, last_connected, is_active)
             VALUES (?, ?, ?, ?)
             RETURNING camera_id
             "#,
-            name,
-            ip_address,
-            last_connected,
-            is_active
+            self.name,
+            self.ip_address,
+            self.last_connected,
+            self.is_active
         )
         .fetch_one(pool)
         .await?;
 
-        Ok(result.camera_id)
+        self.camera_id = result.camera_id;
+
+        Ok(())
     }
 
-    pub async fn get(pool: &SqlitePool, camera_id: i64) -> Result<Self> {
+    async fn get_using_id(pool: &SqlitePool, camera_id: i64) -> Result<Self> {
         sqlx::query_as!(
             Camera,
             r#"
@@ -64,42 +68,47 @@ impl Camera {
         .await
     }
 
-    pub async fn update(
-        pool: &SqlitePool,
-        camera_id: i64,
-        name: &str,
-        ip_address: Option<&str>,
-        last_connected: Option<OffsetDateTime>,
-        is_active: bool,
-    ) -> Result<bool> {
-        let rows_affected = sqlx::query!(
+    async fn update_using_self(
+        &self,
+        pool: &SqlitePool
+    ) -> Result<()> {
+        sqlx::query!(
             r#"
             UPDATE cameras
             SET name = ?, ip_address = ?, last_connected = ?, is_active = ?
             WHERE camera_id = ?
+            RETURNING camera_id
             "#,
-            name,
-            ip_address,
-            last_connected,
-            is_active,
+            self.name,
+            self.ip_address,
+            self.last_connected,
+            self.is_active,
+            self.camera_id
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn delete_using_id(pool: &SqlitePool, camera_id: i64) -> Result<()> {
+        sqlx::query!(
+            r#"
+            DELETE
+            FROM cameras
+            WHERE camera_id = ?
+            RETURNING camera_id
+            "#,
             camera_id
         )
-        .execute(pool)
-        .await?
-        .rows_affected();
+        .fetch_one(pool)
+        .await?;
 
-        Ok(rows_affected > 0)
+        Ok(())
     }
+}
 
-    pub async fn delete(pool: &SqlitePool, camera_id: i64) -> Result<bool> {
-        let rows_affected = sqlx::query!("DELETE FROM cameras WHERE camera_id = ?", camera_id)
-            .execute(pool)
-            .await?
-            .rows_affected();
-
-            Ok(rows_affected > 0)
-    }
-
+impl Camera {
     pub async fn list_accessible_to_user(
         db: &SqlitePool,
         user_id: i64,
@@ -126,21 +135,24 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn create(pool: SqlitePool) -> Result<()> {
-        let camera_name = "Test Camera";
-        let ip_address = Camera::DEFAULT.ip_address;
-        let last_connected = Camera::DEFAULT.last_connected;
-        let is_active = Camera::DEFAULT.is_active;
+        let mut camera = Camera {
+            camera_id: Camera::DEFAULT.camera_id,
+            name: "Test Camera".to_string(),
+            ip_address: Camera::DEFAULT.ip_address,
+            last_connected: Camera::DEFAULT.last_connected,
+            is_active: Camera::DEFAULT.is_active
+        };
         
-        let camera_id = Camera::create(&pool, camera_name, ip_address.as_deref(), last_connected, is_active).await?;
+        camera.create_using_self(&pool).await?;
 
-        assert_eq!(camera_id, 3);
+        assert_eq!(camera.camera_id, 3);
 
-        let camera = Camera::get(&pool, camera_id).await?;
+        let returned_camera = Camera::get_using_id(&pool, camera.camera_id).await?;
 
-        assert_eq!(camera.name, camera_name);
-        assert_eq!(camera.ip_address, ip_address);
-        assert_eq!(camera.last_connected, last_connected);
-        assert!(camera.is_active);
+        assert_eq!(returned_camera.name, camera.name);
+        assert_eq!(returned_camera.ip_address, camera.ip_address);
+        assert_eq!(returned_camera.last_connected, camera.last_connected);
+        assert!(returned_camera.is_active);
 
         Ok(())
     }
@@ -149,34 +161,38 @@ mod tests {
     async fn get(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
 
-        let camera = Camera::get(&pool, camera_id).await?;
+        let returned_camera = Camera::get_using_id(&pool, camera_id).await?;
 
-        assert_eq!(camera.camera_id, camera_id);
-        assert_eq!(camera.name, "Front Door");
-        assert_eq!(camera.ip_address, Some("192.168.0.169".to_string()));
-        assert!(camera.is_active);
+        assert_eq!(returned_camera.camera_id, camera_id);
+        assert_eq!(returned_camera.name, "Front Door");
+        assert_eq!(returned_camera.ip_address, Some("192.168.0.169".to_string()));
+        assert!(returned_camera.is_active);
 
         Ok(())
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn update(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
-        let camera_id = 1;
-        let camera_name = "Updated Camera";
-        let ip_address = Some("192.168.0.24".to_string());
-        let last_connected = Some(time::OffsetDateTime::from_unix_timestamp(1_729_443_378)?);
-        let is_active = false;
+        let old_camera = Camera::get_using_id(&pool, 1).await?;
 
-        let updated = Camera::update(&pool, camera_id, camera_name, ip_address.as_deref(), last_connected, is_active).await?;
+        let updated_camera = Camera {
+            camera_id: old_camera.camera_id,
+            name: old_camera.name,
+            ip_address: Some("192.168.0.24".to_string()),
+            last_connected: Some(time::OffsetDateTime::from_unix_timestamp(1_729_443_378)?),
+            is_active: false
+        };
 
-        assert!(updated);
+        let updated = updated_camera.update_using_self(&pool).await;
 
-        let camera = Camera::get(&pool, 1).await?;
+        assert!(updated.is_ok());
 
-        assert_eq!(camera.name, camera_name);
-        assert_eq!(camera.ip_address, ip_address);
-        assert_eq!(camera.last_connected, last_connected);
-        assert!(!camera.is_active);
+        let returned_camera = Camera::get_using_id(&pool, old_camera.camera_id).await?;
+
+        assert_eq!(returned_camera.name, updated_camera.name);
+        assert_eq!(returned_camera.ip_address, updated_camera.ip_address);
+        assert_eq!(returned_camera.last_connected, updated_camera.last_connected);
+        assert!(!returned_camera.is_active);
 
         Ok(())
     }
@@ -184,32 +200,36 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let camera_id = 1;
-        let deleted = Camera::delete(&pool, camera_id).await?;
+        let deleted = Camera::delete_using_id(&pool, camera_id).await;
 
-        assert!(deleted);
+        assert!(deleted.is_ok());
 
-        let camera = Camera::get(&pool, camera_id).await;
+        let returned_camera_result = Camera::get_using_id(&pool, camera_id).await;
 
-        assert!(camera.is_err());
+        assert!(returned_camera_result.is_err());
+
+        let impossible_deleted = Camera::delete_using_id(&pool, camera_id).await;
+
+        assert!(impossible_deleted.is_err());
 
         Ok(())
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
     async fn list_accessible_to_user(pool: SqlitePool) -> Result<()> {
-        let cameras = Camera::list_accessible_to_user(&pool, 3).await?;
+        let returned_cameras = Camera::list_accessible_to_user(&pool, 3).await?;
 
-        assert_eq!(cameras.len(), 2);
+        assert_eq!(returned_cameras.len(), 2);
 
-        assert_eq!(cameras.first().unwrap().camera_id, 1);
-        assert_eq!(cameras.first().unwrap().camera_name, "Front Door");
-        assert!(cameras.first().unwrap().can_view);
-        assert!(!cameras.first().unwrap().can_control);
+        assert_eq!(returned_cameras.first().unwrap().camera_id, 1);
+        assert_eq!(returned_cameras.first().unwrap().camera_name, "Front Door");
+        assert!(returned_cameras.first().unwrap().can_view);
+        assert!(!returned_cameras.first().unwrap().can_control);
 
-        assert_eq!(cameras.get(1).unwrap().camera_id, 2);
-        assert_eq!(cameras.get(1).unwrap().camera_name, "Kitchen");
-        assert!(!cameras.get(1).unwrap().can_view);
-        assert!(!cameras.get(1).unwrap().can_control);
+        assert_eq!(returned_cameras.get(1).unwrap().camera_id, 2);
+        assert_eq!(returned_cameras.get(1).unwrap().camera_name, "Kitchen");
+        assert!(!returned_cameras.get(1).unwrap().can_view);
+        assert!(!returned_cameras.get(1).unwrap().can_control);
 
         Ok(())
     }

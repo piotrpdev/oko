@@ -7,6 +7,7 @@ mod web;
 mod db;
 
 pub use {
+    db::Model,
     db::Camera,
     db::CameraPermission,
     db::CameraPermissionView,
