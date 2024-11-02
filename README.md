@@ -58,6 +58,7 @@ Made using the following resources:
 | [`axum-login` example code][axum-sqlite]  | [MIT][axum-login-license]         |
 | [Axum example code][axum-examples]        | [MIT][axum-license]               |
 | [video2image][video2image]                | N/A[^1]                           |
+| [Vite PWA Svelte template][pwa]           | [MIT][pwa-license]                |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -70,3 +71,5 @@ video-to-image conversion needs."*][video2image-medium]
 [axum-license]: https://github.com/tokio-rs/axum/blob/main/axum/LICENSE
 [video2image]: https://github.com/Wayan123/convert-video2image-and-image2video-using-python/blob/3886bf02af4b3c31d566b95ff7af1c9ad2ef7bc8/video2image.py
 [video2image-medium]: https://medium.com/@wayandadangunsri/converting-video-to-images-using-python-and-opencv-72b2ea66a692
+[pwa]: https://github.com/vite-pwa/create-pwa/tree/9df7c97be15ea6bdc8660472e90db2aa005c9892/templates/template-svelte-ts
+[pwa-license]: https://github.com/vite-pwa/create-pwa/blob/main/LICENSE
