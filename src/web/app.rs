@@ -1,12 +1,10 @@
 use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow, str::FromStr};
 
-use askama_axum::IntoResponse;
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
-use axum_messages::MessagesManagerLayer;
 use futures::{SinkExt, StreamExt};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::Duration;
@@ -15,7 +13,7 @@ use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
 
 // Allows to extract the IP of connecting user
-use axum::extract::{connect_info::ConnectInfo, ws::{Message, WebSocket}, WebSocketUpgrade};
+use axum::{extract::{connect_info::ConnectInfo, ws::{Message, WebSocket}, WebSocketUpgrade}, response::IntoResponse};
 use axum::extract::ws::CloseFrame;
 
 use crate::{
@@ -73,7 +71,6 @@ impl App {
             .route_layer(login_required!(Backend, login_url = "/login"))
             .route("/ws", axum::routing::any(ws_handler))
             .merge(auth::router())
-            .layer(MessagesManagerLayer)
             .layer(auth_layer);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;

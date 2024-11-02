@@ -1,50 +1,78 @@
 <script lang="ts">
-  import svelteLogo from './assets/svelte.svg'
-  import appLogo from '/favicon.svg'
-  import Counter from './lib/Counter.svelte'
   import PWABadge from './lib/PWABadge.svelte'
+
+  async function handleSubmit(event: Event) {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        username: (event.target as HTMLFormElement).username.value,
+        password: (event.target as HTMLFormElement).password.value
+      })
+    })
+
+    if (response.ok) {
+      alert('Login successful')
+    } else {
+      alert('Login failed')
+    }
+  }
+
+  async function getData() {
+    const response = await fetch('/api/')
+
+    if (response.redirected) {
+      alert('You need to login first')
+      return
+    }
+
+    if (response.ok) {
+      const data = await response.json()
+      alert(JSON.stringify(data))
+    } else {
+      alert('Failed to get data')
+    }
+  }
+
+  async function logout() {
+    const response = await fetch('/api/logout')
+
+    if (response.ok) {
+      alert('Logout successful')
+    } else {
+      alert('Logout failed')
+    }
+  }
 </script>
 
 <main>
+  <form on:submit|preventDefault={handleSubmit}>
+    <fieldset>
+      <legend>User login</legend>
+      <p>
+        <label for="username">Username</label>
+        <input name="username" id="username" value="admin" />
+      </p>
+      <p>
+        <label for="password">Password</label>
+        <input
+          name="password"
+          id="password"
+          type="password"
+          value="hunter42"
+        />
+      </p>
+    </fieldset>
+
+    <button type="submit">Login</button>
+  </form>
+
   <div>
-    <a href="https://vitejs.dev" target="_blank" rel="noreferrer">
-      <img src={appLogo} class="logo" alt="oko Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank" rel="noreferrer">
-      <img src={svelteLogo} class="logo svelte" alt="Svelte Logo" />
-    </a>
+    <button on:click={getData}>Get Data</button>
+    <button on:click={logout}>Logout</button>
   </div>
-  <h1>oko</h1>
-
-  <div class="card">
-    <Counter />
-  </div>
-
-  <p>
-    Check out <a href="https://github.com/sveltejs/kit#readme" target="_blank" rel="noreferrer">SvelteKit</a>, the official Svelte app framework powered by Vite!
-  </p>
-
-  <p class="read-the-docs">
-    Click on the Vite and Svelte logos to learn more
-  </p>
 </main>
 
 <PWABadge />
-
-<style>
-  .logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
-  }
-  .logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-  }
-  .logo.svelte:hover {
-    filter: drop-shadow(0 0 2em #ff3e00aa);
-  }
-  .read-the-docs {
-    color: #888;
-  }
-</style>

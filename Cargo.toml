@@ -8,12 +8,9 @@ publish = false
 name = "oko"
 
 [dependencies]
-askama = { version = "0.12.1", features = ["with-axum"] }
-askama_axum = "0.4.0"
 async-trait = "0.1.74"
 axum = { version = "0.7.5", features = ["ws"] }
 axum-login = "0.16.0"
-axum-messages = "0.7.0"
 http = "1.0.0"
 hyper = "1.0.1"
 password-auth = "1.0.0"
@@ -38,7 +35,7 @@ tracing = "0.1.40"
 
 [lints.rust]
 unsafe_code = "forbid"
-unused_imports = "deny"
+unused_imports = "warn"
 unused_variables = "deny"
 unused_must_use = "deny"
 dead_code = "warn"

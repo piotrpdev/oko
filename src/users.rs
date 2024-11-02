@@ -12,8 +12,7 @@ use crate::db::{Model, User};
 #[derive(Debug, Clone, Deserialize)]
 pub struct Credentials {
     pub username: String,
-    pub password: String,
-    pub next: Option<String>,
+    pub password: String
 }
 
 // TODO: Make db private again and pass db state to Router as layer
