@@ -1,5 +1,6 @@
 <script lang="ts">
   import { replace } from "svelte-spa-router";
+  import { user } from "../lib/userStore";
 
   async function handleSubmit(event: Event) {
     const response = await fetch('/api/login', {
@@ -14,6 +15,20 @@
     })
 
     if (response.ok) {
+      const response = await fetch('/api/')
+
+      if (response.redirected) {
+        alert('You need to login first')
+        return
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        $user = data
+      } else {
+        alert('Failed to get data')
+      }
+
       replace('/')
     } else {
       alert('Login failed')
