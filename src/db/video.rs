@@ -18,7 +18,7 @@ pub struct Video {
 
 pub struct Default {
     pub video_id: i64,
-    pub end_time: Option<OffsetDateTime>
+    pub end_time: Option<OffsetDateTime>,
 }
 
 impl Default {
@@ -31,13 +31,10 @@ impl Model for Video {
     type Default = Default;
     const DEFAULT: Default = Default {
         video_id: -1,
-        end_time: None
+        end_time: None,
     };
 
-    async fn create_using_self(
-        &mut self,
-        pool: &SqlitePool
-    ) -> Result<()> {
+    async fn create_using_self(&mut self, pool: &SqlitePool) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO videos (camera_id, file_path, start_time, end_time, file_size)
@@ -71,10 +68,7 @@ impl Model for Video {
         .await
     }
 
-    async fn update_using_self(
-        &self,
-        pool: &SqlitePool
-    ) -> Result<()> {
+    async fn update_using_self(&self, pool: &SqlitePool) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE videos
@@ -143,7 +137,7 @@ mod tests {
             file_path: "/path/to/video.mp4".to_string(),
             start_time: OffsetDateTime::now_utc(),
             end_time: Video::DEFAULT.end_time,
-            file_size: Some(1024)
+            file_size: Some(1024),
         };
 
         video.create_using_self(&pool).await?;
@@ -168,8 +162,14 @@ mod tests {
 
         assert_eq!(returned_video.video_id, video_id);
         assert_eq!(returned_video.camera_id, Some(1));
-        assert_eq!(returned_video.file_path, "/home/piotrpdev/oko/scripts/1.mp4");
-        assert_eq!(returned_video.start_time, OffsetDateTime::from_unix_timestamp(1_729_479_512)?);
+        assert_eq!(
+            returned_video.file_path,
+            "/home/piotrpdev/oko/scripts/1.mp4"
+        );
+        assert_eq!(
+            returned_video.start_time,
+            OffsetDateTime::from_unix_timestamp(1_729_479_512)?
+        );
         assert_eq!(returned_video.file_size, Some(6_762_403));
 
         Ok(())
@@ -185,7 +185,7 @@ mod tests {
             file_path: old_video.file_path,
             start_time: old_video.start_time,
             end_time: Some(OffsetDateTime::now_utc()),
-            file_size: Some(2048)
+            file_size: Some(2048),
         };
 
         let updated = updated_video.update_using_self(&pool).await;
@@ -226,7 +226,10 @@ mod tests {
         assert_eq!(returned_videos.first().unwrap().video_id, 1);
         assert_eq!(returned_videos.first().unwrap().camera_id, Some(1));
         assert_eq!(returned_videos.first().unwrap().camera_name, "Front Door");
-        assert_eq!(returned_videos.first().unwrap().file_path, "/home/piotrpdev/oko/scripts/1.mp4");
+        assert_eq!(
+            returned_videos.first().unwrap().file_path,
+            "/home/piotrpdev/oko/scripts/1.mp4"
+        );
         assert_eq!(returned_videos.first().unwrap().file_size, Some(6_762_403));
 
         Ok(())

@@ -19,7 +19,7 @@ pub struct Default {
     pub camera_id: i64,
     pub ip_address: Option<String>,
     pub last_connected: Option<OffsetDateTime>,
-    pub is_active: bool
+    pub is_active: bool,
 }
 
 impl Model for Camera {
@@ -28,13 +28,10 @@ impl Model for Camera {
         camera_id: -1,
         ip_address: None,
         last_connected: None,
-        is_active: true
+        is_active: true,
     };
 
-    async fn create_using_self(
-        &mut self,
-        pool: &SqlitePool
-    ) -> Result<()> {
+    async fn create_using_self(&mut self, pool: &SqlitePool) -> Result<()> {
         let result = sqlx::query!(
             r#"
             INSERT INTO cameras (name, ip_address, last_connected, is_active)
@@ -68,10 +65,7 @@ impl Model for Camera {
         .await
     }
 
-    async fn update_using_self(
-        &self,
-        pool: &SqlitePool
-    ) -> Result<()> {
+    async fn update_using_self(&self, pool: &SqlitePool) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE cameras
@@ -140,9 +134,9 @@ mod tests {
             name: "Test Camera".to_string(),
             ip_address: Camera::DEFAULT.ip_address,
             last_connected: Camera::DEFAULT.last_connected,
-            is_active: Camera::DEFAULT.is_active
+            is_active: Camera::DEFAULT.is_active,
         };
-        
+
         camera.create_using_self(&pool).await?;
 
         assert_eq!(camera.camera_id, 3);
@@ -165,7 +159,10 @@ mod tests {
 
         assert_eq!(returned_camera.camera_id, camera_id);
         assert_eq!(returned_camera.name, "Front Door");
-        assert_eq!(returned_camera.ip_address, Some("192.168.0.169".to_string()));
+        assert_eq!(
+            returned_camera.ip_address,
+            Some("192.168.0.169".to_string())
+        );
         assert!(returned_camera.is_active);
 
         Ok(())
@@ -180,7 +177,7 @@ mod tests {
             name: old_camera.name,
             ip_address: Some("192.168.0.24".to_string()),
             last_connected: Some(time::OffsetDateTime::from_unix_timestamp(1_729_443_378)?),
-            is_active: false
+            is_active: false,
         };
 
         let updated = updated_camera.update_using_self(&pool).await;
@@ -191,7 +188,10 @@ mod tests {
 
         assert_eq!(returned_camera.name, updated_camera.name);
         assert_eq!(returned_camera.ip_address, updated_camera.ip_address);
-        assert_eq!(returned_camera.last_connected, updated_camera.last_connected);
+        assert_eq!(
+            returned_camera.last_connected,
+            updated_camera.last_connected
+        );
         assert!(!returned_camera.is_active);
 
         Ok(())
@@ -215,7 +215,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_permissions")))]
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_permissions")
+    ))]
     async fn list_accessible_to_user(pool: SqlitePool) -> Result<()> {
         let returned_cameras = Camera::list_accessible_to_user(&pool, 3).await?;
 

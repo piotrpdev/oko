@@ -25,10 +25,10 @@ mod get {
             Some(user) => {
                 // TODO: Handle different error types
                 let Ok(cameras) =
-                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id)
-                    .await else {
-                        return StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                    };
+                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
 
                 let safe_user = user.to_redacted_clone();
 

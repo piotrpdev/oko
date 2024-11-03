@@ -35,15 +35,15 @@ impl AuthUser for User {
 
     fn session_auth_hash(&self) -> &[u8] {
         self.password_hash.as_bytes() // We use the password hash as the auth
-                                 // hash--what this means
-                                 // is when the user changes their password the
-                                 // auth session becomes invalid.
+                                      // hash--what this means
+                                      // is when the user changes their password the
+                                      // auth session becomes invalid.
     }
 }
 
 #[allow(dead_code)]
 pub struct Default {
-    user_id: i64
+    user_id: i64,
 }
 
 impl Default {
@@ -55,9 +55,7 @@ impl Default {
 
 impl Model for User {
     type Default = Default;
-    const DEFAULT: Default = Default {
-        user_id: -1
-    };
+    const DEFAULT: Default = Default { user_id: -1 };
 
     async fn create_using_self(&mut self, pool: &SqlitePool) -> Result<()> {
         let result = sqlx::query!(
@@ -74,7 +72,7 @@ impl Model for User {
         .await?;
 
         self.user_id = result.user_id;
-        
+
         Ok(())
     }
 
@@ -143,12 +141,13 @@ impl User {
         .await
     }
 
-    #[must_use] pub fn to_redacted_clone(&self) -> Self {
+    #[must_use]
+    pub fn to_redacted_clone(&self) -> Self {
         Self {
             user_id: self.user_id,
             username: self.username.clone(),
             password_hash: "[redacted]".to_string(),
-            created_at: self.created_at
+            created_at: self.created_at,
         }
     }
 }
@@ -167,7 +166,7 @@ mod tests {
         };
 
         user.create_using_self(&pool).await?;
-        
+
         assert_eq!(user.user_id, 4);
 
         let returned_user = User::get_using_id(&pool, 4).await?;
@@ -175,7 +174,7 @@ mod tests {
         assert_eq!(returned_user.username, user.username);
         assert_eq!(returned_user.password_hash, user.password_hash);
         assert_eq!(returned_user.created_at, user.created_at);
-        
+
         Ok(())
     }
 
@@ -199,12 +198,15 @@ mod tests {
     async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let user_id = 2;
         let returned_user = User::get_using_id(&pool, user_id).await?;
-        
+
         assert_eq!(returned_user.user_id, user_id);
         assert_eq!(returned_user.username, "piotrpdev");
         assert_eq!(returned_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
-        assert_eq!(returned_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
-        
+        assert_eq!(
+            returned_user.created_at,
+            OffsetDateTime::from_unix_timestamp(1_729_530_138)?
+        );
+
         Ok(())
     }
 
@@ -213,12 +215,15 @@ mod tests {
         let username = "piotrpdev";
 
         let returned_user = User::get_using_username(&pool, username).await?;
-        
+
         assert_eq!(returned_user.user_id, 2);
         assert_eq!(returned_user.username, username);
         assert_eq!(returned_user.password_hash, "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw");
-        assert_eq!(returned_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
-        
+        assert_eq!(
+            returned_user.created_at,
+            OffsetDateTime::from_unix_timestamp(1_729_530_138)?
+        );
+
         Ok(())
     }
 
@@ -234,7 +239,7 @@ mod tests {
         };
 
         let updated = updated_user.update_using_self(&pool).await;
-        
+
         assert!(updated.is_ok());
 
         let returned_user = User::get_using_id(&pool, old_user.user_id).await?;
@@ -243,7 +248,7 @@ mod tests {
         assert_eq!(returned_user.username, updated_user.username);
         assert_eq!(returned_user.password_hash, updated_user.password_hash);
         assert_eq!(returned_user.created_at, updated_user.created_at);
-        
+
         Ok(())
     }
 
@@ -251,7 +256,7 @@ mod tests {
     async fn delete(pool: SqlitePool) -> Result<()> {
         let user_id = 2;
         let deleted = User::delete_using_id(&pool, user_id).await;
-        
+
         assert!(deleted.is_ok());
 
         let returned_user = User::get_using_id(&pool, user_id).await;
@@ -261,7 +266,7 @@ mod tests {
         let impossible_deleted = User::delete_using_id(&pool, user_id).await;
 
         assert!(impossible_deleted.is_err());
-        
+
         Ok(())
     }
 
@@ -271,12 +276,15 @@ mod tests {
 
         let returned_user = User::get_using_id(&pool, user_id).await?;
         let redacted_user = returned_user.to_redacted_clone();
-        
+
         assert_eq!(redacted_user.user_id, user_id);
         assert_eq!(redacted_user.username, "piotrpdev");
         assert_eq!(redacted_user.password_hash, "[redacted]");
-        assert_eq!(redacted_user.created_at, OffsetDateTime::from_unix_timestamp(1_729_530_138)?);
-        
+        assert_eq!(
+            redacted_user.created_at,
+            OffsetDateTime::from_unix_timestamp(1_729_530_138)?
+        );
+
         Ok(())
     }
 }

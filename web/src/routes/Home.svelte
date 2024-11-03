@@ -3,19 +3,19 @@
   import { user } from "../lib/userStore";
 
   async function logout() {
-    const response = await fetch('/api/logout')
+    const response = await fetch("/api/logout");
 
     if (response.ok) {
-      $user = null
-      replace('/login')
+      $user = null;
+      replace("/login");
     } else {
-      alert('Logout failed')
+      alert("Logout failed");
     }
   }
 </script>
 
 <main>
-    <pre>
+  <pre>
         {JSON.stringify($user, null, 2)}
     </pre>
   <div>

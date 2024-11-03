@@ -26,7 +26,7 @@ repos:
             entry: npm run --prefix ./web lint:fix
             language: system
             types: [text]
-            files: "\\.(html|js|ts|svelte)$"
+            files: "\\.(html|js|ts|svelte|json)$"
             pass_filenames: false
           - id: clippy
             name: clippy

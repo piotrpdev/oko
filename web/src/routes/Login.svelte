@@ -3,35 +3,35 @@
   import { user } from "../lib/userStore";
 
   async function handleSubmit(event: Event) {
-    const response = await fetch('/api/login', {
-      method: 'POST',
+    const response = await fetch("/api/login", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
         username: (event.target as HTMLFormElement).username.value,
-        password: (event.target as HTMLFormElement).password.value
-      })
-    })
+        password: (event.target as HTMLFormElement).password.value,
+      }),
+    });
 
     if (response.ok) {
-      const response = await fetch('/api/')
+      const response = await fetch("/api/");
 
       if (response.redirected) {
-        alert('You need to login first')
-        return
+        alert("You need to login first");
+        return;
       }
 
       if (response.ok) {
-        const data = await response.json()
-        $user = data
+        const data = await response.json();
+        $user = data;
       } else {
-        alert('Failed to get data')
+        alert("Failed to get data");
       }
 
-      replace('/')
+      replace("/");
     } else {
-      alert('Login failed')
+      alert("Login failed");
     }
   }
 </script>
@@ -46,12 +46,7 @@
       </p>
       <p>
         <label for="password">Password</label>
-        <input
-          name="password"
-          id="password"
-          type="password"
-          value="hunter42"
-        />
+        <input name="password" id="password" type="password" value="hunter42" />
       </p>
     </fieldset>
 
