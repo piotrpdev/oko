@@ -1,4 +1,4 @@
-use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow, str::FromStr};
+use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow, path::PathBuf, str::FromStr};
 
 use axum_login::{
     login_required,
@@ -9,6 +9,7 @@ use futures::{SinkExt, StreamExt};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::Duration;
 use tokio::{signal, task::AbortHandle};
+use tower_http::services::ServeDir;
 use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
 
@@ -73,9 +74,12 @@ impl App {
         let backend = Backend::new(self.db);
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
+        let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web/dist/");
+
         let app = protected::router()
-            .route_layer(login_required!(Backend, login_url = "/login"))
-            .route("/ws", axum::routing::any(ws_handler))
+            .fallback_service(ServeDir::new(vite_build_dir).append_index_html_on_directories(true))
+            .route_layer(login_required!(Backend, login_url = "/api/login"))
+            .route("/api/ws", axum::routing::any(ws_handler))
             .merge(auth::router())
             .layer(auth_layer);
 
