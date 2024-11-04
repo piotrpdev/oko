@@ -1,6 +1,6 @@
 import { writable } from "svelte/store";
 
-type User = {
+export type User = {
   user_id: number;
   username: string;
   password_hash: string;

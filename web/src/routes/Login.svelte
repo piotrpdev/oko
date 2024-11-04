@@ -2,15 +2,18 @@
   import { replace } from "svelte-spa-router";
   import { user } from "../lib/userStore";
 
-  async function handleSubmit(event: Event) {
+  let username = "admin";
+  let password = "hunter42";
+
+  async function handleSubmit() {
     const response = await fetch("/api/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        username: (event.target as HTMLFormElement).username.value,
-        password: (event.target as HTMLFormElement).password.value,
+        username,
+        password,
       }),
     });
 
@@ -42,11 +45,16 @@
       <legend>User login</legend>
       <p>
         <label for="username">Username</label>
-        <input name="username" id="username" value="admin" />
+        <input name="username" id="username" bind:value={username} />
       </p>
       <p>
         <label for="password">Password</label>
-        <input name="password" id="password" type="password" value="hunter42" />
+        <input
+          name="password"
+          id="password"
+          type="password"
+          bind:value={password}
+        />
       </p>
     </fieldset>
 
