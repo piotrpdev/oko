@@ -1,12 +1,10 @@
 use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow, str::FromStr};
 
-use askama_axum::IntoResponse;
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
-use axum_messages::MessagesManagerLayer;
 use futures::{SinkExt, StreamExt};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::Duration;
@@ -15,8 +13,15 @@ use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
 
 // Allows to extract the IP of connecting user
-use axum::extract::{connect_info::ConnectInfo, ws::{Message, WebSocket}, WebSocketUpgrade};
 use axum::extract::ws::CloseFrame;
+use axum::{
+    extract::{
+        connect_info::ConnectInfo,
+        ws::{Message, WebSocket},
+        WebSocketUpgrade,
+    },
+    response::IntoResponse,
+};
 
 use crate::{
     users::Backend,
@@ -30,11 +35,10 @@ pub struct App {
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let sqlite_connect_options =
-            SqliteConnectOptions::from_str("sqlite://data.db")?
-                .create_if_missing(true);
+            SqliteConnectOptions::from_str("sqlite://data.db")?.create_if_missing(true);
 
         let db = SqlitePool::connect_with(sqlite_connect_options).await?;
-        
+
         sqlx::migrate!().run(&db).await?;
 
         Ok(Self { db })
@@ -73,15 +77,17 @@ impl App {
             .route_layer(login_required!(Backend, login_url = "/login"))
             .route("/ws", axum::routing::any(ws_handler))
             .merge(auth::router())
-            .layer(MessagesManagerLayer)
             .layer(auth_layer);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 
         // Ensure we use a shutdown signal to abort the deletion task.
-        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-            .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
-            .await?;
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
+        .await?;
 
         deletion_task.await??;
 

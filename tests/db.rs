@@ -1,7 +1,10 @@
 use oko::{Camera, CameraPermission, CameraSetting, Model, User, Video};
 use sqlx::{Result, SqlitePool};
 
-#[sqlx::test(fixtures(path = "../fixtures", scripts("users", "cameras", "camera_permissions", "videos", "camera_settings")))]
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions", "videos", "camera_settings")
+))]
 async fn camera_on_delete(pool: SqlitePool) -> Result<()> {
     let camera_id = 1;
     let permission_id = 1;
@@ -32,7 +35,10 @@ async fn camera_on_delete(pool: SqlitePool) -> Result<()> {
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../fixtures", scripts("users", "cameras", "camera_permissions", "camera_settings")))]
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions", "camera_settings")
+))]
 async fn user_on_delete(pool: SqlitePool) -> Result<()> {
     let user_id = 2;
     let camera_id = 2;

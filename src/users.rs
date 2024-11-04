@@ -13,7 +13,6 @@ use crate::db::{Model, User};
 pub struct Credentials {
     pub username: String,
     pub password: String,
-    pub next: Option<String>,
 }
 
 // TODO: Make db private again and pass db state to Router as layer
@@ -54,7 +53,8 @@ impl AuthnBackend for Backend {
         task::spawn_blocking(|| {
             // We're using password-based authentication--this works by comparing our form
             // input with an argon2 password hash.
-            Ok(Some(user).filter(|user| verify_password(creds.password, &user.password_hash).is_ok()))
+            Ok(Some(user)
+                .filter(|user| verify_password(creds.password, &user.password_hash).is_ok()))
         })
         .await?
     }

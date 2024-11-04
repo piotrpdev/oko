@@ -12,17 +12,17 @@ ws = websocket.WebSocket()
 # Function to extract frames from a video until reaching the desired frame count
 def extract_frames(video_file):
     cap = cv2.VideoCapture(video_file)
-    
+
     while True:
         ret, frame = cap.read()
-        
+
         if not ret:
             break
 
         time.sleep(1)
 
         ws.send(frame.tobytes(), websocket.ABNF.OPCODE_BINARY)
-    
+
     cap.release()
 
 if __name__ == "__main__":

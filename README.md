@@ -43,8 +43,12 @@ xdg-open http://localhost:8000/tarpaulin-report.html
 
 ### Lint
 
+Linting done using [`pre-commit`][pre-commit].
+
 ```bash
-cargo clippy --all-targets
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
 ```
 
 ## License
@@ -58,11 +62,15 @@ Made using the following resources:
 | [`axum-login` example code][axum-sqlite]  | [MIT][axum-login-license]         |
 | [Axum example code][axum-examples]        | [MIT][axum-license]               |
 | [video2image][video2image]                | N/A[^1]                           |
+| [Vite PWA Svelte template][pwa]           | [MIT][pwa-license]                |
+| [Svelte ESLint example config][eslint]    | [MIT][eslint-license]             |
+| [Svelte Prettier example config][prettier]| [MIT][prettier-license]           |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
 video-to-image conversion needs."*][video2image-medium]
 
+[pre-commit]: https://github.com/pre-commit/pre-commit
 [license]: ./LICENSE
 [axum-sqlite]: https://github.com/maxcountryman/axum-login/tree/9c26b37cd03be8d803ae261b7bc556229c2043da/examples/sqlite
 [axum-login-license]: https://github.com/maxcountryman/axum-login/blob/9c26b37cd03be8d803ae261b7bc556229c2043da/LICENSE
@@ -70,3 +78,11 @@ video-to-image conversion needs."*][video2image-medium]
 [axum-license]: https://github.com/tokio-rs/axum/blob/main/axum/LICENSE
 [video2image]: https://github.com/Wayan123/convert-video2image-and-image2video-using-python/blob/3886bf02af4b3c31d566b95ff7af1c9ad2ef7bc8/video2image.py
 [video2image-medium]: https://medium.com/@wayandadangunsri/converting-video-to-images-using-python-and-opencv-72b2ea66a692
+[pwa]: https://github.com/vite-pwa/create-pwa/tree/9df7c97be15ea6bdc8660472e90db2aa005c9892/templates/template-svelte-ts
+[pwa-license]: https://github.com/vite-pwa/create-pwa/blob/main/LICENSE
+[eslint]: https://github.com/ota-meshi/eslint-online-playground/blob/main/src/examples/plugin-svelte_with_ts/eslint.config.js.txt
+[eslint-license]: https://github.com/ota-meshi/eslint-online-playground/blob/main/LICENSE
+[prettier]: https://github.com/sveltejs/prettier-plugin-svelte
+[prettier-license]: https://github.com/sveltejs/prettier-plugin-svelte/blob/master/LICENSE
+
+<!-- https://eslint.org/docs/latest/use/configure/language-options -->

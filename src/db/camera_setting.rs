@@ -17,7 +17,7 @@ pub struct CameraSetting {
 
 pub struct Default {
     pub setting_id: i64,
-    pub flashlight_enabled: bool
+    pub flashlight_enabled: bool,
 }
 
 impl Default {
@@ -31,16 +31,13 @@ impl Model for CameraSetting {
     type Default = Default;
     const DEFAULT: Default = Default {
         setting_id: -1,
-        flashlight_enabled: false
+        flashlight_enabled: false,
     };
 
-    async fn create_using_self(
-        &mut self,
-        pool: &SqlitePool
-    ) -> Result<()> {
+    async fn create_using_self(&mut self, pool: &SqlitePool) -> Result<()> {
         let result = sqlx::query!(
             r#"
-            INSERT INTO camera_settings 
+            INSERT INTO camera_settings
             (camera_id, flashlight_enabled, resolution, framerate, last_modified, modified_by)
             VALUES (?, ?, ?, ?, ?, ?)
             RETURNING setting_id
@@ -60,14 +57,11 @@ impl Model for CameraSetting {
         Ok(())
     }
 
-    async fn get_using_id(
-        pool: &SqlitePool,
-        id: i64,
-    ) -> Result<Self> {
+    async fn get_using_id(pool: &SqlitePool, id: i64) -> Result<Self> {
         sqlx::query_as!(
             CameraSetting,
             r#"
-            SELECT setting_id, camera_id, flashlight_enabled, resolution, 
+            SELECT setting_id, camera_id, flashlight_enabled, resolution,
                    framerate, last_modified, modified_by
             FROM camera_settings WHERE setting_id = ?
             "#,
@@ -77,14 +71,11 @@ impl Model for CameraSetting {
         .await
     }
 
-    async fn update_using_self(
-        &self,
-        pool: &SqlitePool
-    ) -> Result<()> {
+    async fn update_using_self(&self, pool: &SqlitePool) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE camera_settings
-            SET flashlight_enabled = ?, resolution = ?, 
+            SET flashlight_enabled = ?, resolution = ?,
                 framerate = ?, last_modified = ?,
                 modified_by = ?
             WHERE setting_id = ?
@@ -124,7 +115,10 @@ impl Model for CameraSetting {
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_settings")
+    ))]
     async fn create(pool: SqlitePool) -> Result<()> {
         let mut camera_setting = CameraSetting {
             setting_id: CameraSetting::DEFAULT.setting_id,
@@ -139,11 +133,15 @@ mod tests {
         camera_setting.create_using_self(&pool).await?;
 
         assert_eq!(camera_setting.setting_id, 3);
-        
-        let returned_setting = CameraSetting::get_using_id(&pool, camera_setting.setting_id).await?;
+
+        let returned_setting =
+            CameraSetting::get_using_id(&pool, camera_setting.setting_id).await?;
 
         assert_eq!(returned_setting.camera_id, camera_setting.camera_id);
-        assert_eq!(returned_setting.flashlight_enabled, camera_setting.flashlight_enabled);
+        assert_eq!(
+            returned_setting.flashlight_enabled,
+            camera_setting.flashlight_enabled
+        );
         assert_eq!(returned_setting.resolution, camera_setting.resolution);
         assert_eq!(returned_setting.framerate, camera_setting.framerate);
         assert_eq!(returned_setting.last_modified, camera_setting.last_modified);
@@ -152,7 +150,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_settings")
+    ))]
     async fn get(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let setting_id = 1;
 
@@ -163,13 +164,19 @@ mod tests {
         assert!(!returned_setting.flashlight_enabled);
         assert_eq!(returned_setting.resolution, "800x600");
         assert_eq!(returned_setting.framerate, 5);
-        assert_eq!(returned_setting.last_modified, OffsetDateTime::from_unix_timestamp(1_729_530_153)?);
+        assert_eq!(
+            returned_setting.last_modified,
+            OffsetDateTime::from_unix_timestamp(1_729_530_153)?
+        );
         assert_eq!(returned_setting.modified_by, Some(1));
 
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_settings")
+    ))]
     async fn update(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
         let old_camera_setting = CameraSetting::get_using_id(&pool, 1).await?;
 
@@ -187,18 +194,28 @@ mod tests {
 
         assert!(updated.is_ok());
 
-        let returned_setting = CameraSetting::get_using_id(&pool, old_camera_setting.setting_id).await?;
+        let returned_setting =
+            CameraSetting::get_using_id(&pool, old_camera_setting.setting_id).await?;
         assert_eq!(returned_setting.camera_id, 1);
-        assert_eq!(returned_setting.flashlight_enabled, new_camera_setting.flashlight_enabled);
+        assert_eq!(
+            returned_setting.flashlight_enabled,
+            new_camera_setting.flashlight_enabled
+        );
         assert_eq!(returned_setting.resolution, new_camera_setting.resolution);
         assert_eq!(returned_setting.framerate, new_camera_setting.framerate);
-        assert_eq!(returned_setting.last_modified, new_camera_setting.last_modified);
+        assert_eq!(
+            returned_setting.last_modified,
+            new_camera_setting.last_modified
+        );
         assert_eq!(returned_setting.modified_by, new_camera_setting.modified_by);
 
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "cameras", "camera_settings")))]
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_settings")
+    ))]
     async fn delete(pool: SqlitePool) -> Result<()> {
         let setting_id = 1;
 

@@ -2,19 +2,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use crate::web::App;
 
+mod db;
 mod users;
 mod web;
-mod db;
 
 pub use {
-    db::Model,
-    db::Camera,
-    db::CameraPermission,
-    db::CameraPermissionView,
-    db::CameraSetting,
-    db::User,
-    db::Video,
-    db::VideoCameraView,
+    db::Camera, db::CameraPermission, db::CameraPermissionView, db::CameraSetting, db::Model,
+    db::User, db::Video, db::VideoCameraView,
 };
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
