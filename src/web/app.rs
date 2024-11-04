@@ -1,4 +1,10 @@
-use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow, path::PathBuf, str::FromStr};
+use std::{
+    borrow::Cow,
+    net::{Ipv4Addr, SocketAddr},
+    ops::ControlFlow,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use axum_login::{
     login_required,
@@ -8,7 +14,7 @@ use axum_login::{
 use futures::{SinkExt, StreamExt};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::Duration;
-use tokio::{signal, task::AbortHandle};
+use tokio::{net::TcpListener, signal, task::AbortHandle};
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
@@ -30,7 +36,8 @@ use crate::{
 };
 
 pub struct App {
-    db: SqlitePool,
+    pub db: SqlitePool,
+    pub listener: TcpListener,
 }
 
 impl App {
@@ -42,7 +49,11 @@ impl App {
 
         sqlx::migrate!().run(&db).await?;
 
-        Ok(Self { db })
+        let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 3000));
+
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+
+        Ok(Self { db, listener })
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -83,11 +94,9 @@ impl App {
             .merge(auth::router())
             .layer(auth_layer);
 
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-
         // Ensure we use a shutdown signal to abort the deletion task.
         axum::serve(
-            listener,
+            self.listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
         )
         .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))

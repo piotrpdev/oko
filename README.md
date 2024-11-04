@@ -65,6 +65,7 @@ Made using the following resources:
 | [Vite PWA Svelte template][pwa]           | [MIT][pwa-license]                |
 | [Svelte ESLint example config][eslint]    | [MIT][eslint-license]             |
 | [Svelte Prettier example config][prettier]| [MIT][prettier-license]           |
+| [Playwright-rust README][playwright]      | [MIT][playwright-license]         |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -84,5 +85,7 @@ video-to-image conversion needs."*][video2image-medium]
 [eslint-license]: https://github.com/ota-meshi/eslint-online-playground/blob/main/LICENSE
 [prettier]: https://github.com/sveltejs/prettier-plugin-svelte
 [prettier-license]: https://github.com/sveltejs/prettier-plugin-svelte/blob/master/LICENSE
+[playwright]: https://github.com/octaltree/playwright-rust/blob/master/README.md
+[playwright-license]: https://github.com/octaltree/playwright-rust/blob/master/Cargo.toml
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->

@@ -50,6 +50,6 @@
       </p>
     </fieldset>
 
-    <button type="submit">Login</button>
+    <button id="login" type="submit">Login</button>
   </form>
 </main>
