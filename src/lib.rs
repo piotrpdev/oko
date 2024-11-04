@@ -1,6 +1,6 @@
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::web::App;
+pub use crate::web::App;
 
 mod db;
 mod users;

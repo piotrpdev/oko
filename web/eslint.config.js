@@ -11,6 +11,9 @@ export default tseslint.config(
   ...sveltePlugin.configs["flat/prettier"],
   eslintPluginPrettierRecommended,
   {
+    ignores: ["dist/*"],
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.browser,

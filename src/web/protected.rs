@@ -3,7 +3,7 @@ use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use crate::users::AuthSession;
 
 pub fn router() -> Router<()> {
-    Router::new().route("/", get(self::get::protected))
+    Router::new().route("/api/", get(self::get::protected))
 }
 
 mod get {

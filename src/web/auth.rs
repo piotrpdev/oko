@@ -9,8 +9,8 @@ use crate::users::{AuthSession, Credentials};
 
 pub fn router() -> Router<()> {
     Router::new()
-        .route("/login", post(self::post::login))
-        .route("/logout", get(self::get::logout))
+        .route("/api/login", post(self::post::login))
+        .route("/api/logout", get(self::get::logout))
 }
 
 mod post {

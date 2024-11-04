@@ -19,6 +19,6 @@
         {JSON.stringify($user, null, 2)}
     </pre>
   <div>
-    <button on:click={logout}>Logout</button>
+    <button id="logout" on:click={logout}>Logout</button>
   </div>
 </main>
