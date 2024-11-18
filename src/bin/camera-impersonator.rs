@@ -4,7 +4,8 @@ use std::env;
 use std::process::ExitCode;
 
 use futures::SinkExt;
-use opencv::core::Mat;
+use opencv::core::{Mat, Vector};
+use opencv::imgcodecs::imencode_def;
 use opencv::prelude::*;
 use opencv::videoio::{VideoCapture, VideoCaptureTraitConst, CAP_ANY};
 use tokio::time::{sleep, Duration};
@@ -12,7 +13,7 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
 const USAGE_MESSAGE: &str = "Usage: camera-impersonator <path_to_video_file>";
-const SEND_INTERVAL: Duration = Duration::from_millis(1000);
+const SEND_INTERVAL: Duration = Duration::from_millis(80);
 
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::expect_used)]
@@ -41,8 +42,15 @@ async fn main() -> ExitCode {
 
             let data = frame.data_bytes().unwrap();
             println!("Sending frame of size: {}", data.len());
+
+            // ? Maybe encode on the server instead
+            let mut img_vector = Vector::default();
+            let _ = imencode_def(".jpg", &frame, &mut img_vector);
+
+            // std::fs::write("jpg_from_bytes.jpg", img).expect("Failed to write image");
+
             ws_stream
-                .send(Message::Binary(data.to_vec()))
+                .send(Message::Binary(img_vector.into()))
                 .await
                 .unwrap();
         } else {

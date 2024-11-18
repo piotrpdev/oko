@@ -4,6 +4,7 @@ use std::{
     ops::ControlFlow,
     path::PathBuf,
     str::FromStr,
+    sync::Arc,
 };
 
 use axum_login::{
@@ -14,13 +15,12 @@ use axum_login::{
 use futures::{SinkExt, StreamExt};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::Duration;
-use tokio::{net::TcpListener, signal, task::AbortHandle};
+use tokio::{net::TcpListener, signal, sync::watch, task::AbortHandle};
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
 
 // Allows to extract the IP of connecting user
-use axum::extract::ws::CloseFrame;
 use axum::{
     extract::{
         connect_info::ConnectInfo,
@@ -29,11 +29,19 @@ use axum::{
     },
     response::IntoResponse,
 };
+use axum::{
+    extract::{ws::CloseFrame, State},
+    Router,
+};
 
 use crate::{
     users::Backend,
     web::{auth, protected},
 };
+
+struct AppState {
+    images_tx: watch::Sender<Message>,
+}
 
 pub struct App {
     pub db: SqlitePool,
@@ -87,10 +95,20 @@ impl App {
 
         let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web/dist/");
 
+        // TODO: Use better default message
+        let tx = watch::Sender::new(Message::Text("Hello, world!".to_string()));
+
+        let state = Arc::new(AppState { images_tx: tx });
+
+        let main_router = Router::new()
+            .route("/api/ws", axum::routing::any(ws_handler))
+            .with_state(state);
+
+        // TODO: Order of merge matters here, make sure the correct routes are protected and that fallback works as intended.
         let app = protected::router()
             .fallback_service(ServeDir::new(vite_build_dir).append_index_html_on_directories(true))
             .route_layer(login_required!(Backend, login_url = "/api/login"))
-            .route("/api/ws", axum::routing::any(ws_handler))
+            .merge(main_router)
             .merge(auth::router())
             .layer(auth_layer);
 
@@ -146,61 +164,43 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
 async fn ws_handler(
     ws: WebSocketUpgrade,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    state: State<Arc<AppState>>,
 ) -> impl IntoResponse {
     println!("{addr} connected to ws_handler.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
 }
 
+// TODO: Use tracing instead of print in this function
 /// Actual websocket statemachine (one will be spawned per connection)
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
-    // send a ping (unsupported by some browsers) just to kick things off and get a response
-    if socket.send(Message::Ping(vec![1, 2, 3])).await.is_ok() {
-        println!("Pinged {who}...");
-    } else {
-        println!("Could not send ping {who}!");
-        // no Error here since the only thing we can do is to close the connection.
-        // If we can not send messages, there is no way to salvage the statemachine anyway.
-        return;
-    }
+async fn handle_socket(socket: WebSocket, who: SocketAddr, state: State<Arc<AppState>>) {
+    println!("{who} connected to handle_socket.");
 
-    // receive single message from a client (we can either receive or send with socket).
-    // this will likely be the Pong for our Ping or a hello message from client.
-    // waiting for message from a client will block this task, but will not block other client's
-    // connections.
-    if let Some(msg) = socket.recv().await {
-        if let Ok(msg) = msg {
-            if process_message(msg, who).is_break() {
-                return;
-            }
-        } else {
-            println!("client {who} abruptly disconnected");
-            return;
-        }
-    }
+    let mut images_rx = state.images_tx.subscribe();
 
     // By splitting socket we can send and receive at the same time. In this example we will send
     // unsolicited messages to client based on some sort of server's internal event (i.e .timer).
     let (mut sender, mut receiver) = socket.split();
 
     // Spawn a task that will push several messages to the client (does not matter what client does)
-    let mut send_task = tokio::spawn(async move {
-        let n_msg = 10000;
-        for i in 0..n_msg {
-            // In case of any websocket error, we exit.
-            if sender
-                .send(Message::Text(format!("Server message {i} ...")))
-                .await
-                .is_err()
-            {
-                return i;
-            }
+    let send_task = tokio::spawn(async move {
+        // TODO: Adding a sleep might be a good idea?
+        loop {
+            // TODO: this might not be the best way of doing this
+            let message = (*images_rx.borrow_and_update()).clone();
 
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            // TODO: Don't send images to cameras. Maybe use a room system?
+            // TODO: Handle error here
+            let _ = sender.send(message).await;
+
+            if images_rx.changed().await.is_err() {
+                break;
+            }
         }
 
         println!("Sending close to {who}...");
+
         if let Err(e) = sender
             .send(Message::Close(Some(CloseFrame {
                 code: axum::extract::ws::close_code::NORMAL,
@@ -210,37 +210,39 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
         {
             println!("Could not send Close due to {e}, probably it is ok?");
         }
-        n_msg
     });
 
     // This second task will receive messages from client and print them on server console
-    let mut recv_task = tokio::spawn(async move {
-        let mut cnt = 0;
+    // TODO: Reduce amount of cloning in this function
+    let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            cnt += 1;
+            let message = process_message(msg.clone(), who);
+
             // print message and break if instructed to do so
-            if process_message(msg, who).is_break() {
+            if message.is_break() {
                 break;
             }
+
+            // TODO: Make sure msg is Binary
+            let _ = state.images_tx.send(msg);
         }
-        cnt
     });
 
     // If any one of the tasks exit, abort the other.
     tokio::select! {
-        rv_a = (&mut send_task) => {
+        rv_a = (send_task) => {
             match rv_a {
-                Ok(a) => println!("{a} messages sent to {who}"),
+                Ok(()) => println!("send_task finished for {who}"),
                 Err(a) => println!("Error sending messages {a:?}")
             }
-            recv_task.abort();
+            // recv_task.abort();
         },
-        rv_b = (&mut recv_task) => {
+        rv_b = (recv_task) => {
             match rv_b {
-                Ok(b) => println!("Received {b} messages"),
+                Ok(()) => println!("recv_task finished for {who}"),
                 Err(b) => println!("Error receiving messages {b:?}")
             }
-            send_task.abort();
+            // send_task.abort();
         }
     }
 
