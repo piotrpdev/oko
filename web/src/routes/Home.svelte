@@ -14,6 +14,7 @@
 
   let socket: WebSocket;
   let frameCount = 0;
+  let imgSrc: string = "";
 
   async function logout() {
     const response = await fetch("/api/logout");
@@ -38,8 +39,7 @@
       console.log("Received image");
       frameCount++;
       const url = URL.createObjectURL(data);
-      const img = document.querySelector("img");
-      if (img) img.src = url;
+      imgSrc = url;
     }
   }
 
@@ -65,7 +65,7 @@
         class="flex items-center gap-2 text-lg font-semibold md:text-base"
       >
         <Package2 class="h-6 w-6" />
-        <span class="sr-only">Acme Inc</span>
+        <span class="sr-only">Oko</span>
       </a>
       <a
         href="##"
@@ -96,7 +96,7 @@
         <nav class="grid gap-6 text-lg font-medium">
           <a href="##" class="flex items-center gap-2 text-lg font-semibold">
             <Package2 class="h-6 w-6" />
-            <span class="sr-only">Acme Inc</span>
+            <span class="sr-only">Oko</span>
           </a>
           <a href="##" class="text-muted-foreground hover:text-foreground">
             Cameras
@@ -110,6 +110,7 @@
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild let:builder>
           <Button
+            id="user-menu-button"
             builders={[builder]}
             variant="secondary"
             size="icon"
@@ -119,13 +120,15 @@
             <span class="sr-only">Toggle user menu</span>
           </Button>
         </DropdownMenu.Trigger>
-        <DropdownMenu.Content align="end">
+        <DropdownMenu.Content id="user-menu" align="end">
           <DropdownMenu.Label>My Account</DropdownMenu.Label>
           <DropdownMenu.Separator />
           <DropdownMenu.Item>Settings</DropdownMenu.Item>
           <DropdownMenu.Item>Support</DropdownMenu.Item>
           <DropdownMenu.Separator />
-          <DropdownMenu.Item on:click={logout}>Logout</DropdownMenu.Item>
+          <DropdownMenu.Item id="logout" on:click={logout}
+            >Logout</DropdownMenu.Item
+          >
         </DropdownMenu.Content>
       </DropdownMenu.Root>
     </div>
@@ -155,7 +158,14 @@
             </Card.Description>
           </Card.Header>
           <Card.Content>
-            <img width="800px" height="600px" alt="live feed" />
+            <!-- TODO: Add placeholder image/skeleton -->
+            <img
+              src={imgSrc}
+              width="800px"
+              height="600px"
+              alt="live feed"
+              style={`visibility: ${imgSrc ? "visible" : "hidden"}`}
+            />
           </Card.Content>
         </Card.Root>
       </div>

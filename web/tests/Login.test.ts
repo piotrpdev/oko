@@ -29,7 +29,7 @@ describe("Login Flow", () => {
 
     const newUserValuePromise = waitForStoreChange(user);
 
-    await fireEvent.click(getByText("Login"));
+    await fireEvent.click(getByText("Sign in"));
 
     const newUserValue = await newUserValuePromise;
 

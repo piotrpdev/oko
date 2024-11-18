@@ -59,14 +59,14 @@ async fn login_and_logout(
 
     page.click_builder("button#login").click().await?;
 
-    page.wait_for_selector_builder("button#logout")
-        .wait_for_selector()
+    page.click_builder("button#user-menu-button")
+        .click()
         .await?;
 
     let s: String = page.eval("() => location.href").await?;
     assert_eq!(s, (addr_str.clone() + "#/"));
 
-    page.click_builder("button#logout").click().await?;
+    page.click_builder("div#logout").click().await?;
 
     page.wait_for_selector_builder("button#login")
         .wait_for_selector()
