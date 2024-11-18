@@ -47,4 +47,12 @@ export default tseslint.config(
       parser: svelteParser,
     },
   },
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { varsIgnorePattern: "^\\$\\$(Props|Events|Slots)$" },
+      ],
+    },
+  },
 );
