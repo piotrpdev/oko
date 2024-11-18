@@ -87,6 +87,7 @@ Made using the following resources:
 | [Vitest mocking example][mocking]         | [MIT][vitest-license]             |
 | [opencv-rs example code][opencv-example]  | [MIT][opencv-license]             |
 | [tungstenite examples][tungsten-example]  | [MIT][tungsten-license]           |
+| [shadcn Blocks][shadcn-blocks]            | [MIT][shadcn-license]             |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -118,5 +119,7 @@ video-to-image conversion needs."*][video2image-medium]
 [opencv-license]: https://github.com/twistedfall/opencv-rust/blob/6784a7e74c5cd3e1edced9484d6839d67ee70a12/LICENSE
 [tungsten-example]: https://github.com/snapview/tokio-tungstenite/blob/cae2e89102dbb212ee723b912f7dc540398be28e/examples/client.rs
 [tungsten-license]: https://github.com/snapview/tokio-tungstenite/blob/cae2e89102dbb212ee723b912f7dc540398be28e/LICENSE
+[shadcn-blocks]: https://github.com/huntabyte/shadcn-svelte/tree/main/sites/docs/src/lib/registry/new-york/block
+[shadcn-license]: https://github.com/huntabyte/shadcn-svelte/blob/main/LICENSE.md
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->
