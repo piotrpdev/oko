@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "./app.css";
   import Router, { replace } from "svelte-spa-router";
   import PWABadge from "./lib/PWABadge.svelte";
   import Home from "./routes/Home.svelte";

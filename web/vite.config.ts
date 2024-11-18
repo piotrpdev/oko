@@ -1,3 +1,5 @@
+import path from "path";
+
 import { VitePWA } from "vite-plugin-pwa";
 import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
@@ -5,6 +7,11 @@ import { svelteTesting } from "@testing-library/svelte/vite";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  resolve: {
+    alias: {
+      $lib: path.resolve("./src/lib"),
+    },
+  },
   server: {
     proxy: {
       "/api": {
