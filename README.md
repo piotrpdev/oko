@@ -10,21 +10,31 @@ Fully local home security system
 
 </div>
 
-## Run
+## Build
+
+### Prerequisites
+
+You need to install [OpenCV][opencv]'s dependencies, see [this guide][opencv-install].
+
+### Setup
 
 ```bash
 # Note: This installs support for all SQLx databases
 cargo install sqlx-cli
 sqlx database create
 sqlx migrate run
+```
+
+### Run
+
+```bash
 cargo run
 ```
 
 ## Development
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+cargo run --bin camera-impersonator ./videos/1.mp4
 ```
 
 ### Test
@@ -75,11 +85,15 @@ Made using the following resources:
 | [Playwright-rust README][playwright]      | [MIT][playwright-license]         |
 | [Testing Library setup][test-setup]       | [MIT][test-license]               |
 | [Vitest mocking example][mocking]         | [MIT][vitest-license]             |
+| [opencv-rs example code][opencv-example]  | [MIT][opencv-license]             |
+| [tungstenite examples][tungsten-example]  | [MIT][tungsten-license]           |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
 video-to-image conversion needs."*][video2image-medium]
 
+[opencv]: https://opencv.org/
+[opencv-install]: https://github.com/twistedfall/opencv-rust/blob/6784a7e74c5cd3e1edced9484d6839d67ee70a12/INSTALL.md
 [pre-commit]: https://github.com/pre-commit/pre-commit
 [license]: ./LICENSE
 [axum-sqlite]: https://github.com/maxcountryman/axum-login/tree/9c26b37cd03be8d803ae261b7bc556229c2043da/examples/sqlite
@@ -100,5 +114,9 @@ video-to-image conversion needs."*][video2image-medium]
 [test-license]: https://github.com/testing-library/testing-library-docs/blob/main/LICENSE
 [mocking]: https://vitest.dev/guide/mocking#requests
 [vitest-license]: https://github.com/vitest-dev/vitest/blob/main/LICENSE
+[opencv-example]: https://github.com/twistedfall/opencv-rust/blob/6784a7e74c5cd3e1edced9484d6839d67ee70a12/examples/video_capture_http_stream.rs
+[opencv-license]: https://github.com/twistedfall/opencv-rust/blob/6784a7e74c5cd3e1edced9484d6839d67ee70a12/LICENSE
+[tungsten-example]: https://github.com/snapview/tokio-tungstenite/blob/cae2e89102dbb212ee723b912f7dc540398be28e/examples/client.rs
+[tungsten-license]: https://github.com/snapview/tokio-tungstenite/blob/cae2e89102dbb212ee723b912f7dc540398be28e/LICENSE
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->
