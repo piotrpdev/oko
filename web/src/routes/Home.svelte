@@ -54,6 +54,23 @@
   // ? Maybe use a store for cameras
   // ? Maybe show confirmation dialog on remove
 
+  let addCameraDialogOpen = false;
+  let getCamerasPromise = getCameras();
+
+  const refreshCameras = () => (getCamerasPromise = getCameras());
+
+  async function getCameras(): Promise<Camera[]> {
+    const response = await fetch("/api/cameras");
+
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    } else {
+      alert("Failed to fetch cameras");
+      throw new Error("Failed to fetch cameras");
+    }
+  }
+
   async function addCamera() {
     const response = await fetch("/api/cameras", {
       method: "POST",
@@ -68,6 +85,8 @@
 
     if (response.ok) {
       alert("Camera added");
+      addCameraDialogOpen = false;
+      refreshCameras();
     } else {
       alert("Add Camera failed");
     }
@@ -80,20 +99,9 @@
 
     if (response.ok) {
       alert("Camera removed");
+      refreshCameras();
     } else {
       alert("Remove Camera failed");
-    }
-  }
-
-  async function getCameras(): Promise<Camera[]> {
-    const response = await fetch("/api/cameras");
-
-    if (response.ok) {
-      const data = await response.json();
-      return data;
-    } else {
-      alert("Failed to fetch cameras");
-      throw new Error("Failed to fetch cameras");
     }
   }
 
@@ -201,9 +209,9 @@
         class="grid gap-4 text-sm text-muted-foreground"
         data-x-chunk-container="chunk-container after:right-0"
       >
-        {#await getCameras()}
+        {#await getCamerasPromise}
           <!-- TODO: Use skeletons -->
-          <p>Loading...</p>
+          <span class="px-3 py-0 text-muted-foreground">Loading...</span>
         {:then cameras}
           {#each cameras as camera}
             <div class="group flex items-center gap-3 rounded-lg px-3 py-0">
@@ -225,7 +233,7 @@
             </div>
           {/each}
           {#if $user?.user?.username === "admin"}
-            <Dialog.Root>
+            <Dialog.Root bind:open={addCameraDialogOpen}>
               <Dialog.Trigger
                 class={buttonVariants({ variant: "outline" }) + " gap-1"}
               >

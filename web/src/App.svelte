@@ -6,6 +6,8 @@
   import Login from "./routes/Login.svelte";
   import wrap from "svelte-spa-router/wrap";
 
+  // TODO: Add transitions to everything
+
   // TODO: Make these async
   const routes = {
     "/": wrap({
