@@ -26,7 +26,7 @@
       const response = await fetch("/api/");
 
       if (response.redirected) {
-        alert("You need to login first");
+        console.error("You need to login first");
         return;
       }
 
@@ -34,12 +34,12 @@
         const data = await response.json();
         $user = data;
       } else {
-        alert("Failed to get data");
+        console.error("Failed to get data");
       }
 
       replace("/");
     } else {
-      alert("Login failed");
+      console.error("Login failed");
     }
   }
 </script>

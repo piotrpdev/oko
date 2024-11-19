@@ -1,9 +1,9 @@
 import "@testing-library/jest-dom/vitest";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse, ws } from "msw";
 import { WebSocket } from "undici";
-import { User } from "./src/lib/userStore.ts";
+import { Camera, User } from "./src/lib/userStore.ts";
 
 Reflect.set(globalThis, "WebSocket", WebSocket);
 
@@ -17,9 +17,31 @@ export const testUser: User = {
   created_at: [2021, 10, 21, 17, 1, 23],
 };
 
+export let testCameras: Camera[] = [
+  {
+    camera_id: 1,
+    camera_name: "Front Door",
+    can_control: true,
+    can_view: true,
+  },
+  {
+    camera_id: 2,
+    camera_name: "Kitchen",
+    can_control: true,
+    can_view: true,
+  },
+];
+
+export const testCamera1: Camera = {
+  camera_id: 3,
+  camera_name: "Backyard",
+  can_control: true,
+  can_view: true,
+};
+
 export const testUserAndCameras = {
   user: testUser,
-  cameras: [],
+  cameras: testCameras,
 };
 
 function timeoutPromise(ms: number) {
@@ -38,20 +60,57 @@ export const handlers = [
   http.get("/api/", () => {
     return HttpResponse.json(testUserAndCameras);
   }),
+  http.get("/api/cameras", () => {
+    return HttpResponse.json(testCameras);
+  }),
+  http.post("/api/cameras", async ({ request }) => {
+    const requestBody = await request.formData();
+
+    if (!requestBody) return HttpResponse.error();
+
+    const newCamera = {
+      camera_id: testCameras.length + 1,
+      camera_name: requestBody.get("name") as string,
+      can_control: false,
+      can_view: true,
+    };
+
+    testCameras.push(newCamera);
+
+    return HttpResponse.json(newCamera.camera_id);
+  }),
+  http.delete("/api/cameras/:cameraId", ({ params: { cameraId } }) => {
+    const parsedCameraId = Number(cameraId);
+
+    testCameras = testCameras.filter(
+      (camera) => camera.camera_id !== parsedCameraId,
+    );
+
+    return HttpResponse.json(parsedCameraId);
+  }),
   api_ws.addEventListener("connection", async ({ client }) => {
     console.log("WebSocket connection established");
     // https://stackoverflow.com/a/16245768/19020549
     client.send(testBlob1);
-    await timeoutPromise(10);
+    // ? There might be a better way that doesn't involve waiting
+    await timeoutPromise(100);
     client.send(testBlob2);
   }),
 ];
 
 const server = setupServer(...handlers);
 
+let testCamerasBackup: Camera[];
+
 beforeAll(() => {
   // global.WebSocket = null;
   server.listen({ onUnhandledRequest: "error" });
 });
+beforeEach(() => {
+  testCamerasBackup = [...testCameras];
+});
 afterAll(() => server.close());
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  testCameras = testCamerasBackup;
+});

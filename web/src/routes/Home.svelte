@@ -29,7 +29,7 @@
       $user = null;
       replace("/login");
     } else {
-      alert("Logout failed");
+      console.error("Logout failed");
     }
   }
 
@@ -66,7 +66,7 @@
       const data = await response.json();
       return data;
     } else {
-      alert("Failed to fetch cameras");
+      console.error("Failed to fetch cameras");
       throw new Error("Failed to fetch cameras");
     }
   }
@@ -84,11 +84,11 @@
     });
 
     if (response.ok) {
-      alert("Camera added");
+      console.log("Camera added");
       addCameraDialogOpen = false;
       refreshCameras();
     } else {
-      alert("Add Camera failed");
+      console.error("Add Camera failed");
     }
   }
 
@@ -98,10 +98,10 @@
     });
 
     if (response.ok) {
-      alert("Camera removed");
+      console.log("Camera removed");
       refreshCameras();
     } else {
-      alert("Remove Camera failed");
+      console.error("Remove Camera failed");
     }
   }
 
@@ -217,6 +217,7 @@
             <div class="group flex items-center gap-3 rounded-lg px-3 py-0">
               <a
                 href="##"
+                data-camera-id={camera.camera_id}
                 class={"text-muted-foreground transition-all hover:text-primary" +
                   (camera.camera_name === "Kitchen"
                     ? " font-semibold text-primary"
@@ -226,6 +227,8 @@
                 on:click={() => removeCamera(camera.camera_id)}
                 variant="ghost"
                 size="icon"
+                aria-label="Remove Camera"
+                data-camera-id={camera.camera_id}
                 class="ml-auto flex h-4 w-4 shrink-0 items-center justify-center opacity-0 transition-all group-hover:opacity-100"
               >
                 <Trash class="h-4 w-4" />
@@ -235,6 +238,7 @@
           {#if $user?.user?.username === "admin"}
             <Dialog.Root bind:open={addCameraDialogOpen}>
               <Dialog.Trigger
+                id="add-camera"
                 class={buttonVariants({ variant: "outline" }) + " gap-1"}
               >
                 <CirclePlus class="h-3.5 w-3.5" />
@@ -266,7 +270,7 @@
                     </div>
                   </div>
                   <Dialog.Footer>
-                    <Button type="submit">Add Camera</Button>
+                    <Button type="submit">Submit</Button>
                   </Dialog.Footer>
                 </form>
               </Dialog.Content>
