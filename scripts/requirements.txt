@@ -1,3 +1,0 @@
-# Taken from https://github.com/Wayan123/convert-video2image-and-image2video-using-python/blob/3886bf02af4b3c31d566b95ff7af1c9ad2ef7bc8/requirements.txt
-opencv-python==4.10.*
-websocket-client==1.8.*

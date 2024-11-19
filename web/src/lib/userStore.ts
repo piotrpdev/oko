@@ -7,4 +7,11 @@ export type User = {
   created_at: Array<number>;
 };
 
-export const user = writable(null as User | null);
+export type Camera = object;
+
+export type UserAndCameras = {
+  user: User;
+  cameras: Array<Camera>;
+};
+
+export const user = writable(null as UserAndCameras | null);

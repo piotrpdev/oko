@@ -68,6 +68,7 @@
 {/if}
 
 <style>
+  /* TODO: Change color scheme to dark */
   .pwa-toast {
     position: fixed;
     right: 0;
