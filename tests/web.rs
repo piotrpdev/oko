@@ -2,7 +2,10 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 use futures::SinkExt;
 use oko::App;
-use playwright::{api::BrowserContext, Playwright};
+use playwright::{
+    api::{frame::FrameState, BrowserContext},
+    Playwright,
+};
 use sqlx::SqlitePool;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -15,6 +18,30 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, Web
 
 const TEST_IMG_1: [u8; 1] = [1];
 const TEST_IMG_2: [u8; 1] = [2];
+
+#[allow(dead_code)]
+struct TestCamera {
+    camera_id: i32,
+    name: &'static str,
+}
+
+#[allow(dead_code)]
+const TEST_CAMERA_1: TestCamera = TestCamera {
+    camera_id: 1,
+    name: "Front Door",
+};
+
+#[allow(dead_code)]
+const TEST_CAMERA_2: TestCamera = TestCamera {
+    camera_id: 2,
+    name: "Kitchen",
+};
+
+#[allow(dead_code)]
+const TEST_CAMERA_3: TestCamera = TestCamera {
+    camera_id: 3,
+    name: "Backyard",
+};
 
 async fn setup(
     pool: SqlitePool,
@@ -151,6 +178,63 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
 
     assert!(new_src.contains("blob:"));
     assert_ne!(src, new_src);
+
+    Ok(())
+}
+
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions")
+))]
+async fn camera_add_remove(
+    pool: SqlitePool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, context, addr_str, _addr) = setup(pool).await?;
+
+    let page = context.new_page().await?;
+    page.goto_builder(&(addr_str.clone() + "#/login"))
+        .goto()
+        .await?;
+
+    page.click_builder("button#login").click().await?;
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/"));
+
+    page.wait_for_selector_builder("div#logout")
+        .wait_for_selector()
+        .await?;
+
+    if !page.is_visible("a[data-camera-id=\"1\"]", None).await? {
+        return Err("Front Door camera not found".into());
+    };
+
+    if page.is_visible("a[data-camera-id=\"3\"]", None).await? {
+        return Err("Backyard camera found too early".into());
+    };
+
+    page.click_builder("button#add-camera").click().await?;
+
+    page.click_builder("button[type=\"submit\"]")
+        .click()
+        .await?;
+
+    page.wait_for_selector_builder("a[data-camera-id=\"3\"]")
+        .wait_for_selector()
+        .await?;
+
+    page.click_builder("button[aria-label=\"Remove Camera\"][data-camera-id=\"3\"]")
+        .click()
+        .await?;
+
+    page.wait_for_selector_builder("a[data-camera-id=\"3\"]")
+        .state(FrameState::Detached)
+        .wait_for_selector()
+        .await?;
 
     Ok(())
 }

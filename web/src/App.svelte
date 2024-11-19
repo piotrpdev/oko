@@ -6,6 +6,10 @@
   import Login from "./routes/Login.svelte";
   import wrap from "svelte-spa-router/wrap";
 
+  // TODO: Add transitions to everything
+  // TODO: Replace console.error and log with toast notifications
+  // TODO: Stop relying on default form values
+
   // TODO: Make these async
   const routes = {
     "/": wrap({

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS cameras (
     camera_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL CHECK(LENGTH(name) <= 256),
-    ip_address TEXT CHECK(ip_address IS NULL OR LENGTH(ip_address) <= 64),
+    ip_address TEXT UNIQUE CHECK(ip_address IS NULL OR LENGTH(ip_address) <= 64),
     last_connected TIMESTAMP,
     is_active BOOLEAN NOT NULL
 );
@@ -51,6 +51,3 @@ CREATE INDEX IF NOT EXISTS idx_camera_permissions_user ON camera_permissions (us
 CREATE INDEX IF NOT EXISTS idx_videos_camera ON videos (camera_id);
 
 CREATE INDEX IF NOT EXISTS idx_camera_settings_camera ON camera_settings (camera_id);
-
-INSERT INTO users (user_id, username, password_hash, created_at) VALUES
-    (1, 'admin', '$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw', '2024-10-21 17:01:23');
