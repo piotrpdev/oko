@@ -2,16 +2,21 @@
   import CircleUser from "lucide-svelte/icons/circle-user";
   import Menu from "lucide-svelte/icons/menu";
   import Package2 from "lucide-svelte/icons/package-2";
+  import Trash from "lucide-svelte/icons/trash";
+  import CirclePlus from "lucide-svelte/icons/circle-plus";
 
-  import { Button } from "$lib/components/ui/button/index.js";
+  import { Button, buttonVariants } from "$lib/components/ui/button/index.js";
   import * as Card from "$lib/components/ui/card/index.js";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import * as Sheet from "$lib/components/ui/sheet/index.js";
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Label } from "$lib/components/ui/label/index.js";
 
   import { replace } from "svelte-spa-router";
-  import { user } from "../lib/userStore";
+  import { user, type Camera } from "../lib/userStore";
   import { onDestroy, onMount } from "svelte";
-  import CirclePlus from "lucide-svelte/icons/circle-plus";
+  import { Badge } from "$lib/components/ui/badge";
 
   let socket: WebSocket;
   let frameCount = 0;
@@ -42,8 +47,54 @@
     }
   }
 
-  function addCamera() {
-    console.log("Add camera");
+  let name = "Backyard";
+  let address = "192.168.0.30";
+
+  // TODO: Refresh cameras on add/remove
+  // ? Maybe use a store for cameras
+  // ? Maybe show confirmation dialog on remove
+
+  async function addCamera() {
+    const response = await fetch("/api/cameras", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        name,
+        address,
+      }),
+    });
+
+    if (response.ok) {
+      alert("Camera added");
+    } else {
+      alert("Add Camera failed");
+    }
+  }
+
+  async function removeCamera(cameraId: number) {
+    const response = await fetch(`/api/cameras/${cameraId}`, {
+      method: "DELETE",
+    });
+
+    if (response.ok) {
+      alert("Camera removed");
+    } else {
+      alert("Remove Camera failed");
+    }
+  }
+
+  async function getCameras(): Promise<Camera[]> {
+    const response = await fetch("/api/cameras");
+
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    } else {
+      alert("Failed to fetch cameras");
+      throw new Error("Failed to fetch cameras");
+    }
   }
 
   onMount(() => {
@@ -150,14 +201,72 @@
         class="grid gap-4 text-sm text-muted-foreground"
         data-x-chunk-container="chunk-container after:right-0"
       >
-        <a href="##" class="font-semibold text-primary"> Kitchen </a>
-        <a href="##">Front Door</a>
-        {#if $user?.user?.username === "admin"}
-          <Button on:click={addCamera} size="sm" variant="ghost" class="gap-1">
-            <CirclePlus class="h-3.5 w-3.5" />
-            Add Camera
-          </Button>
-        {/if}
+        {#await getCameras()}
+          <!-- TODO: Use skeletons -->
+          <p>Loading...</p>
+        {:then cameras}
+          {#each cameras as camera}
+            <div class="group flex items-center gap-3 rounded-lg px-3 py-0">
+              <a
+                href="##"
+                class={"text-muted-foreground transition-all hover:text-primary" +
+                  (camera.camera_name === "Kitchen"
+                    ? " font-semibold text-primary"
+                    : "")}>{camera.camera_name}</a
+              >
+              <Button
+                on:click={() => removeCamera(camera.camera_id)}
+                variant="ghost"
+                size="icon"
+                class="ml-auto flex h-4 w-4 shrink-0 items-center justify-center opacity-0 transition-all group-hover:opacity-100"
+              >
+                <Trash class="h-4 w-4" />
+              </Button>
+            </div>
+          {/each}
+          {#if $user?.user?.username === "admin"}
+            <Dialog.Root>
+              <Dialog.Trigger
+                class={buttonVariants({ variant: "outline" }) + " gap-1"}
+              >
+                <CirclePlus class="h-3.5 w-3.5" />
+                Add Camera
+              </Dialog.Trigger>
+              <Dialog.Content class="sm:max-w-[425px]">
+                <form class="contents" on:submit|preventDefault={addCamera}>
+                  <Dialog.Header>
+                    <Dialog.Title>Add Camera</Dialog.Title>
+                  </Dialog.Header>
+                  <div class="grid gap-4 py-4">
+                    <div class="grid grid-cols-4 items-center gap-4">
+                      <Label for="name" class="text-right">Name</Label>
+                      <Input
+                        id="name"
+                        placeholder="Backyard"
+                        bind:value={name}
+                        class="col-span-3"
+                      />
+                    </div>
+                    <div class="grid grid-cols-4 items-center gap-4">
+                      <Label for="address" class="text-right">IP Address</Label>
+                      <Input
+                        id="address"
+                        placeholder="192.168.0.30"
+                        bind:value={address}
+                        class="col-span-3"
+                      />
+                    </div>
+                  </div>
+                  <Dialog.Footer>
+                    <Button type="submit">Add Camera</Button>
+                  </Dialog.Footer>
+                </form>
+              </Dialog.Content>
+            </Dialog.Root>
+          {/if}
+        {:catch error}
+          <p>{error.message}</p>
+        {/await}
       </nav>
       <div class="grid gap-6">
         <Card.Root>

@@ -34,6 +34,9 @@ cargo run
 ## Development
 
 ```bash
+# Seed with test data
+cat fixtures/* | sqlite3 data.db
+# Send image frames
 cargo run --bin camera-impersonator ./videos/1.mp4
 ```
 

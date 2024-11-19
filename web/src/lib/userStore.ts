@@ -7,7 +7,12 @@ export type User = {
   created_at: Array<number>;
 };
 
-export type Camera = object;
+export type Camera = {
+  camera_id: number;
+  camera_name: string;
+  can_control: boolean;
+  can_view: boolean;
+};
 
 export type UserAndCameras = {
   user: User;
