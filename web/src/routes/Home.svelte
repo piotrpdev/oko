@@ -30,13 +30,11 @@
   // $user?.user.username
 
   function onMessage(event: MessageEvent) {
-    // const data = JSON.parse(event.data);
-    console.log(event);
-
     const data = event.data;
 
     if (data instanceof Blob) {
-      console.log("Received image");
+      console.log("Frame received");
+      console.log(data);
       frameCount++;
       const url = URL.createObjectURL(data);
       imgSrc = url;
@@ -45,10 +43,11 @@
 
   onMount(() => {
     socket = new WebSocket(`ws://${window.location.host}/api/ws`);
-    socket.onmessage = onMessage;
+    socket.addEventListener("message", onMessage);
   });
 
   onDestroy(() => {
+    socket.removeEventListener("message", onMessage);
     socket.close();
   });
 </script>
@@ -160,6 +159,7 @@
           <Card.Content>
             <!-- TODO: Add placeholder image/skeleton -->
             <img
+              id="live-feed"
               src={imgSrc}
               width="800px"
               height="600px"

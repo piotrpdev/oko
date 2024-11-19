@@ -184,19 +184,25 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: State<Arc<AppS
     let (mut sender, mut receiver) = socket.split();
 
     // Spawn a task that will push several messages to the client (does not matter what client does)
-    let send_task = tokio::spawn(async move {
+    let mut send_task = tokio::spawn(async move {
+        let mut first_received = false;
         // TODO: Adding a sleep might be a good idea?
         loop {
             // TODO: this might not be the best way of doing this
             let message = (*images_rx.borrow_and_update()).clone();
 
-            // TODO: Don't send images to cameras. Maybe use a room system?
-            // TODO: Handle error here
-            let _ = sender.send(message).await;
+            if first_received {
+                println!("Sending message to {who}...");
+                // TODO: Don't send images to cameras. Maybe use a room system?
+                // TODO: Handle error here
+                let _ = sender.send(message).await;
+            }
 
             if images_rx.changed().await.is_err() {
                 break;
             }
+
+            first_received = true;
         }
 
         println!("Sending close to {who}...");
@@ -214,7 +220,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: State<Arc<AppS
 
     // This second task will receive messages from client and print them on server console
     // TODO: Reduce amount of cloning in this function
-    let recv_task = tokio::spawn(async move {
+    let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             let message = process_message(msg.clone(), who);
 
@@ -230,19 +236,19 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: State<Arc<AppS
 
     // If any one of the tasks exit, abort the other.
     tokio::select! {
-        rv_a = (send_task) => {
+        rv_a = (&mut send_task) => {
             match rv_a {
                 Ok(()) => println!("send_task finished for {who}"),
                 Err(a) => println!("Error sending messages {a:?}")
             }
-            // recv_task.abort();
+            recv_task.abort();
         },
-        rv_b = (recv_task) => {
+        rv_b = (&mut recv_task) => {
             match rv_b {
                 Ok(()) => println!("recv_task finished for {who}"),
                 Err(b) => println!("Error receiving messages {b:?}")
             }
-            // send_task.abort();
+            send_task.abort();
         }
     }
 
