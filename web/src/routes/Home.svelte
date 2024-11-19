@@ -11,6 +11,7 @@
   import { replace } from "svelte-spa-router";
   import { user } from "../lib/userStore";
   import { onDestroy, onMount } from "svelte";
+  import CirclePlus from "lucide-svelte/icons/circle-plus";
 
   let socket: WebSocket;
   let frameCount = 0;
@@ -39,6 +40,10 @@
       const url = URL.createObjectURL(data);
       imgSrc = url;
     }
+  }
+
+  function addCamera() {
+    console.log("Add camera");
   }
 
   onMount(() => {
@@ -147,6 +152,12 @@
       >
         <a href="##" class="font-semibold text-primary"> Kitchen </a>
         <a href="##">Front Door</a>
+        {#if $user?.user?.username === "admin"}
+          <Button on:click={addCamera} size="sm" variant="ghost" class="gap-1">
+            <CirclePlus class="h-3.5 w-3.5" />
+            Add Camera
+          </Button>
+        {/if}
       </nav>
       <div class="grid gap-6">
         <Card.Root>
@@ -158,11 +169,11 @@
           </Card.Header>
           <Card.Content>
             <!-- TODO: Add placeholder image/skeleton -->
+            <!-- TODO: Maybe use known camera resolution as aspect ratio when camera is offline -->
             <img
               id="live-feed"
+              class="aspect-[4/3]"
               src={imgSrc}
-              width="800px"
-              height="600px"
               alt="live feed"
               style={`visibility: ${imgSrc ? "visible" : "hidden"}`}
             />

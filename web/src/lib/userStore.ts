@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { writable } from "@macfja/svelte-persistent-store";
 
 export type User = {
   user_id: number;
@@ -14,4 +14,4 @@ export type UserAndCameras = {
   cameras: Array<Camera>;
 };
 
-export const user = writable(null as UserAndCameras | null);
+export const user = writable("user", null as UserAndCameras | null);
