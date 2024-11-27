@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Result, SqlitePool};
-use time::OffsetDateTime;
+use time::{macros::format_description, OffsetDateTime};
 
 use crate::db::VideoCameraView;
 
@@ -19,10 +19,12 @@ pub struct Video {
 pub struct Default {
     pub video_id: i64,
     pub end_time: Option<OffsetDateTime>,
+    pub file_name_format: &'static [time::format_description::BorrowedFormatItem<'static>],
 }
 
 impl Default {
-    pub fn start_time() -> OffsetDateTime {
+    #[allow(clippy::unused_self)]
+    pub fn start_time(&self) -> OffsetDateTime {
         OffsetDateTime::now_utc()
     }
 }
@@ -32,6 +34,9 @@ impl Model for Video {
     const DEFAULT: Default = Default {
         video_id: -1,
         end_time: None,
+        file_name_format: format_description!(
+            "[year]-[month]-[day]_[hour]-[minute]-[second]_[subsecond digits:9]Z"
+        ),
     };
 
     async fn create_using_self(&mut self, pool: &SqlitePool) -> Result<()> {
@@ -135,7 +140,7 @@ mod tests {
             video_id: Video::DEFAULT.video_id,
             camera_id: Some(1),
             file_path: "/path/to/video.mp4".to_string(),
-            start_time: OffsetDateTime::now_utc(),
+            start_time: Video::DEFAULT.start_time(),
             end_time: Video::DEFAULT.end_time,
             file_size: Some(1024),
         };
@@ -162,10 +167,7 @@ mod tests {
 
         assert_eq!(returned_video.video_id, video_id);
         assert_eq!(returned_video.camera_id, Some(1));
-        assert_eq!(
-            returned_video.file_path,
-            "/home/piotrpdev/oko/scripts/1.mp4"
-        );
+        assert_eq!(returned_video.file_path, "/home/piotrpdev/oko/videos/1.mp4");
         assert_eq!(
             returned_video.start_time,
             OffsetDateTime::from_unix_timestamp(1_729_479_512)?
@@ -228,7 +230,7 @@ mod tests {
         assert_eq!(returned_videos.first().unwrap().camera_name, "Front Door");
         assert_eq!(
             returned_videos.first().unwrap().file_path,
-            "/home/piotrpdev/oko/scripts/1.mp4"
+            "/home/piotrpdev/oko/videos/1.mp4"
         );
         assert_eq!(returned_videos.first().unwrap().file_size, Some(6_762_403));
 
