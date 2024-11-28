@@ -3,11 +3,14 @@ use std::net::{Ipv4Addr, SocketAddr};
 use oko::App;
 use playwright::{api::BrowserContext, Playwright};
 use sqlx::SqlitePool;
+use tempfile::{tempdir, TempDir};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
 pub const TEST_IMG_1: [u8; 1] = [1];
 pub const TEST_IMG_2: [u8; 1] = [2];
+
+pub const REAL_TEST_IMG_1: &[u8; 9059] = include_bytes!("../fixtures/real_test_img_1.jpg");
 
 #[allow(dead_code)]
 struct TestCamera {
@@ -34,9 +37,9 @@ const TEST_CAMERA_3: TestCamera = TestCamera {
 };
 
 pub async fn setup(
-    pool: SqlitePool,
+    pool: &SqlitePool,
 ) -> Result<
-    (Playwright, BrowserContext, String, SocketAddr),
+    (Playwright, BrowserContext, String, SocketAddr, TempDir),
     Box<dyn std::error::Error + Send + Sync>,
 > {
     let playwright = Playwright::initialize().await?;
@@ -49,10 +52,17 @@ pub async fn setup(
     let addr = listener.local_addr()?;
     let addr_str = format!("http://{addr}/");
 
-    let app = App { db: pool, listener };
+    let video_path = tempdir()?;
+    let video_pathbuf = video_path.path().to_path_buf();
+
+    let app = App {
+        db: pool.clone(),
+        listener,
+        video_path: video_pathbuf,
+    };
     tokio::spawn(app.serve());
 
-    Ok((playwright, context, addr_str, addr))
+    Ok((playwright, context, addr_str, addr, video_path))
 }
 
 pub async fn setup_ws(

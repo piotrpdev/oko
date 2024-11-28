@@ -51,19 +51,24 @@ use crate::{
     Model, Video,
 };
 
+const SQLITE_URL: &str = "sqlite://data.db";
+const VIDEO_PATH: &str = "./videos/";
+
 struct AppState {
     images_tx: watch::Sender<Message>,
+    video_path: PathBuf,
 }
 
 pub struct App {
     pub db: SqlitePool,
     pub listener: TcpListener,
+    pub video_path: PathBuf,
 }
 
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let sqlite_connect_options =
-            SqliteConnectOptions::from_str("sqlite://data.db")?.create_if_missing(true);
+            SqliteConnectOptions::from_str(SQLITE_URL)?.create_if_missing(true);
 
         let db = SqlitePool::connect_with(sqlite_connect_options).await?;
 
@@ -73,7 +78,14 @@ impl App {
 
         let listener = tokio::net::TcpListener::bind(addr).await?;
 
-        Ok(Self { db, listener })
+        let video_path_relative = PathBuf::from(VIDEO_PATH);
+        let video_path = video_path_relative.canonicalize()?;
+
+        Ok(Self {
+            db,
+            listener,
+            video_path,
+        })
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -110,7 +122,10 @@ impl App {
         // TODO: Use better default message
         let tx = watch::Sender::new(Message::Text("Hello, world!".to_string()));
 
-        let state = Arc::new(AppState { images_tx: tx });
+        let state = Arc::new(AppState {
+            images_tx: tx,
+            video_path: self.video_path,
+        });
 
         let main_router = Router::new()
             .route("/api/ws", axum::routing::any(ws_handler))
@@ -137,6 +152,8 @@ impl App {
         Ok(())
     }
 }
+
+// ? Maybe move all functions below into App impl block, then use `self` for db pool
 
 async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let ctrl_c = async {
@@ -203,22 +220,28 @@ async fn handle_socket(
     let tracker = TaskTracker::new();
     let recording_token = CancellationToken::new();
     let recording_token_clone = recording_token.clone();
+    let video_path = state.video_path.clone();
+
+    // TODO: Init watch message may be consumed by any of the tasks, find way to avoid being off by one.
+    //  Always ignoring the first message in every task is maybe not the best solution.
 
     // ? Maybe use spawn_blocking here, be aware .abort() is not available on blocking tasks
     // TODO: Handle stopping recording properly
     // TODO: Inform client/db if recording fails
     // TODO: Find out which is better, ingesting encoded or decoded images
+    // TODO: Don't spawn record task for every websocket connection, only some are cameras
     let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         tracker.spawn(async move {
             let now = Video::DEFAULT.start_time();
             let formatted_now = now.format(Video::DEFAULT.file_name_format)?;
+            let file_pathbuf = video_path.join(format!("{formatted_now}.avi"));
 
             // TODO: Lookup camera_id from DB
-            // TODO: Use proper user decided file path, maybe have a folder for each camera id
+            // TODO: Use proper user customizable file path, ability to pass tempdir for tests would be nice
             let mut video = Video {
                 video_id: Video::DEFAULT.video_id,
                 camera_id: Some(2),
-                file_path: format!("/home/piotrpdev/oko/videos/{formatted_now}.avi"),
+                file_path: file_pathbuf.to_string_lossy().to_string(),
                 start_time: now,
                 end_time: Video::DEFAULT.end_time,
                 file_size: None,

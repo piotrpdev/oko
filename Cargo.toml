@@ -39,6 +39,7 @@ tokio-util = { version = "0.7.12", features = ["rt"] }
 
 [dev-dependencies]
 playwright = "0.0.20"
+tempfile = "3.14.0"
 
 [lints.rust]
 unsafe_code = "forbid"
