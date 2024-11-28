@@ -102,6 +102,8 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
 
     let mut ws_stream = utils::setup_ws(addr).await?;
 
+    ws_stream.send(Message::Text("camera".to_string())).await?;
+
     ws_stream
         .send(Message::Binary(utils::TEST_IMG_1.into()))
         .await?;
@@ -202,6 +204,8 @@ async fn record(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send
 
     let mut ws_stream = utils::setup_ws(addr).await?;
 
+    ws_stream.send(Message::Text("camera".to_string())).await?;
+
     let sent_frame_count = 20;
 
     for _ in 0..sent_frame_count {
@@ -219,8 +223,7 @@ async fn record(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send
     assert_eq!(new_camera_list.len(), 2);
 
     let new_file_count = video_path.read_dir()?.count();
-    // TODO: Update to `assert_eq!(new_file_count, file_count + 1);` after adding feat to not spawn record task on every ws connection
-    assert!(new_file_count > file_count);
+    assert_eq!(new_file_count, file_count + 1);
 
     let Some(newest_video) = new_camera_list.iter().max_by_key(|v| v.video_id) else {
         return Err("No newest video found".into());

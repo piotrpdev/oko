@@ -206,7 +206,7 @@ async fn ws_handler(
 /// Actual websocket statemachine (one will be spawned per connection)
 #[allow(clippy::too_many_lines)]
 async fn handle_socket(
-    socket: WebSocket,
+    mut socket: WebSocket,
     who: SocketAddr,
     state: State<Arc<AppState>>,
     auth_session: AuthSession,
@@ -225,78 +225,121 @@ async fn handle_socket(
     // TODO: Init watch message may be consumed by any of the tasks, find way to avoid being off by one.
     //  Always ignoring the first message in every task is maybe not the best solution.
 
+    let mut is_camera = false;
+
+    if let Some(msg) = socket.recv().await {
+        if let Ok(msg) = msg {
+            if process_message(msg.clone(), who).is_break() {
+                return;
+            }
+
+            match msg {
+                Message::Text(msg_txt) => {
+                    if msg_txt == "camera" {
+                        println!("{who} is a camera...");
+                        is_camera = true;
+                    } else {
+                        println!("{who} is not camera...");
+                    }
+                }
+                _ => {
+                    println!("Ignoring first message from {who}...");
+                }
+            }
+        } else {
+            println!("client {who} abruptly disconnected");
+            return;
+        }
+    }
+
     // ? Maybe use spawn_blocking here, be aware .abort() is not available on blocking tasks
+    // ? Maybe assume is camera if IP belongs to camera in DB
     // TODO: Handle stopping recording properly
     // TODO: Inform client/db if recording fails
     // TODO: Find out which is better, ingesting encoded or decoded images
-    // TODO: Don't spawn record task for every websocket connection, only some are cameras
     let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
-        tracker.spawn(async move {
-            let now = Video::DEFAULT.start_time();
-            let formatted_now = now.format(Video::DEFAULT.file_name_format)?;
-            let file_pathbuf = video_path.join(format!("{formatted_now}.avi"));
+        if is_camera {
+            tracker.spawn(async move {
+                let now = Video::DEFAULT.start_time();
+                let formatted_now = now.format(Video::DEFAULT.file_name_format)?;
+                let file_pathbuf = video_path.join(format!("{formatted_now}.avi"));
 
-            // TODO: Lookup camera_id from DB
-            // TODO: Use proper user customizable file path, ability to pass tempdir for tests would be nice
-            let mut video = Video {
-                video_id: Video::DEFAULT.video_id,
-                camera_id: Some(2),
-                file_path: file_pathbuf.to_string_lossy().to_string(),
-                start_time: now,
-                end_time: Video::DEFAULT.end_time,
-                file_size: None,
-            };
+                // TODO: Lookup camera_id from DB
+                // TODO: Use proper user customizable file path, ability to pass tempdir for tests would be nice
+                let mut video = Video {
+                    video_id: Video::DEFAULT.video_id,
+                    camera_id: Some(2),
+                    file_path: file_pathbuf.to_string_lossy().to_string(),
+                    start_time: now,
+                    end_time: Video::DEFAULT.end_time,
+                    file_size: None,
+                };
 
-            #[allow(clippy::unwrap_used)]
-            video.create_using_self(&auth_session.backend.db).await?;
+                #[allow(clippy::unwrap_used)]
+                video.create_using_self(&auth_session.backend.db).await?;
 
-            // TODO: Don't hardcode these
-            let video_fourcc = VideoWriter::fourcc('m', 'p', '4', 'v')?;
-            let video_size = Size::new(800, 600);
-            let mut video_writer =
-                VideoWriter::new_def(&video.file_path, video_fourcc, 12.5, video_size)?;
+                // TODO: Don't hardcode these
+                let video_fourcc = VideoWriter::fourcc('m', 'p', '4', 'v')?;
+                let video_size = Size::new(800, 600);
+                let mut video_writer =
+                    VideoWriter::new_def(&video.file_path, video_fourcc, 12.5, video_size)?;
 
-            let mut total_bytes = 0;
+                let mut total_bytes = 0;
 
-            let mut first_received = false;
-            // TODO: Adding a sleep might be a good idea?
-            loop {
-                // TODO: this might not be the best way of doing this
-                let message = (*images_rx_rec.borrow_and_update()).clone();
-                let message_data_vec = message.into_data();
-                let message_data_vec_slice = message_data_vec.as_slice();
-                let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
+                let mut first_received = false;
+                // TODO: Adding a sleep might be a good idea?
+                loop {
+                    // TODO: this might not be the best way of doing this
+                    let message = (*images_rx_rec.borrow_and_update()).clone();
+                    let message_data_vec = message.into_data();
+                    let message_data_vec_slice = message_data_vec.as_slice();
+                    let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
 
-                if first_received {
-                    println!("Recording image from {who}...");
-                    // TODO: Handle error here
-                    // ? Does calling this function too often/quickly risk a crash? Use a buffer/batch?
-                    video_writer.write(&decoded_image)?;
-                    total_bytes += message_data_vec_slice.len();
-                }
+                    if first_received {
+                        println!("Recording image from {who}...");
+                        // TODO: Handle error here
+                        // ? Does calling this function too often/quickly risk a crash? Use a buffer/batch?
+                        video_writer.write(&decoded_image)?;
+                        total_bytes += message_data_vec_slice.len();
+                    }
 
-                tokio::select! {
-                    c = images_rx_rec.changed() => {
-                        if c.is_err() {
+                    tokio::select! {
+                        c = images_rx_rec.changed() => {
+                            if c.is_err() {
+                                break;
+                            }
+                        },
+                        () = recording_token.cancelled() => {
                             break;
                         }
-                    },
-                    () = recording_token.cancelled() => {
-                        break;
+                    }
+
+                    first_received = true;
+                }
+
+                video.end_time = Some(OffsetDateTime::now_utc());
+                video.file_size = Some(total_bytes.try_into()?);
+
+                video.update_using_self(&auth_session.backend.db).await?;
+                println!("Recording finished for {who}...");
+
+                Ok(())
+            })
+        } else {
+            tracker.spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+                loop {
+                    tokio::select! {
+                        _ = interval.tick() => {},
+                        () = recording_token.cancelled() => {
+                            break;
+                        }
                     }
                 }
 
-                first_received = true;
-            }
-
-            video.end_time = Some(OffsetDateTime::now_utc());
-            video.file_size = Some(total_bytes.try_into()?);
-
-            video.update_using_self(&auth_session.backend.db).await?;
-            println!("Recording finished for {who}...");
-
-            Ok(())
-        });
+                Ok(())
+            })
+        };
 
     tracker.close();
 

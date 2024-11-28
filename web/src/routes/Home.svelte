@@ -35,6 +35,10 @@
 
   // $user?.user.username
 
+  function onOpen() {
+    socket.send("user");
+  }
+
   function onMessage(event: MessageEvent) {
     const data = event.data;
 
@@ -107,10 +111,12 @@
 
   onMount(() => {
     socket = new WebSocket(`ws://${window.location.host}/api/ws`);
+    socket.addEventListener("open", onOpen);
     socket.addEventListener("message", onMessage);
   });
 
   onDestroy(() => {
+    socket.removeEventListener("open", onOpen);
     socket.removeEventListener("message", onMessage);
     socket.close();
   });
