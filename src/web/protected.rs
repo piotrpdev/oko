@@ -13,13 +13,20 @@ pub fn router() -> Router<()> {
         .route("/api/cameras", get(self::get::cameras))
         .route("/api/cameras", post(self::post::cameras))
         .route("/api/cameras/:camera_id", delete(self::delete::cameras))
+        .route(
+            "/api/cameras/:camera_id/videos",
+            get(self::get::videos_for_camera),
+        )
+        .route("/api/videos/:video_id", get(self::get::video))
 }
 
 mod get {
-    use axum::Json;
+    use axum::{body::Body, extract::Path, Json};
+    use http::header;
     use serde::Serialize;
+    use tokio_util::io::ReaderStream;
 
-    use crate::{db::Camera, CameraPermissionView, User};
+    use crate::{db::Camera, CameraPermissionView, Model, User, Video};
 
     use super::{AuthSession, IntoResponse, StatusCode};
 
@@ -65,6 +72,62 @@ mod get {
                 println!("{cameras:?}");
 
                 Json(cameras).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+
+    pub async fn videos_for_camera(
+        auth_session: AuthSession,
+        Path(camera_id): Path<i64>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(_user) => {
+                // TODO: Only allow access to user with permissions
+                let Ok(videos) = Video::list_for_camera(&auth_session.backend.db, camera_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                Json(videos).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+
+    // Code copied from: https://github.com/tokio-rs/axum/discussions/608
+    pub async fn video(auth_session: AuthSession, Path(video_id): Path<i64>) -> impl IntoResponse {
+        match auth_session.user {
+            Some(_user) => {
+                // TODO: Only allow access to user with permissions
+                let Ok(video) = Video::get_using_id(&auth_session.backend.db, video_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                let Ok(file) = tokio::fs::File::open(video.file_path.clone()).await else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                let Some(filename) = video.file_path.split(std::path::MAIN_SEPARATOR).last() else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+                let content_type = "video/mp4";
+
+                let stream = ReaderStream::new(file);
+                let body = Body::from_stream(stream);
+
+                let headers = [
+                    (header::CONTENT_TYPE, content_type),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        &format!("attachment; filename={filename:?}"),
+                    ),
+                ];
+
+                println!("{headers:?}");
+
+                (headers, body).into_response()
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
         }

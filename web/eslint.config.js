@@ -30,6 +30,9 @@ export default tseslint.config(
         },
         extraFileExtensions: [".svelte"],
       },
+      globals: {
+        $$Generic: "readonly",
+      },
     },
   },
   {
