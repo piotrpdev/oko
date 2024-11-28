@@ -4,6 +4,7 @@
   import Package2 from "lucide-svelte/icons/package-2";
   import Trash from "lucide-svelte/icons/trash";
   import CirclePlus from "lucide-svelte/icons/circle-plus";
+  import Download from "lucide-svelte/icons/download";
 
   import { Button, buttonVariants } from "$lib/components/ui/button/index.js";
   import * as Card from "$lib/components/ui/card/index.js";
@@ -14,13 +15,16 @@
   import { Label } from "$lib/components/ui/label/index.js";
 
   import { replace } from "svelte-spa-router";
-  import { user, type Camera } from "../lib/userStore";
+  import { user, type Camera, type VideoCameraView } from "../lib/userStore";
   import { onDestroy, onMount } from "svelte";
   import { Badge } from "$lib/components/ui/badge";
+  import * as Table from "$lib/components/ui/table/index.js";
+  import * as ToggleGroup from "$lib/components/ui/toggle-group/index.js";
 
   let socket: WebSocket;
   let frameCount = 0;
   let imgSrc: string = "";
+  let videos = [];
 
   async function logout() {
     const response = await fetch("/api/logout");
@@ -34,6 +38,10 @@
   }
 
   // $user?.user.username
+
+  function onOpen() {
+    socket.send("user");
+  }
 
   function onMessage(event: MessageEvent) {
     const data = event.data;
@@ -105,12 +113,30 @@
     }
   }
 
+  let videosPromise = getVideos(2);
+
+  const refreshVideos = () => (videosPromise = getVideos(2));
+
+  async function getVideos(cameraId: number): Promise<VideoCameraView[]> {
+    const response = await fetch(`/api/cameras/${cameraId}/videos`);
+
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    } else {
+      console.error("Failed to fetch videos");
+      throw new Error("Failed to fetch videos");
+    }
+  }
+
   onMount(() => {
     socket = new WebSocket(`ws://${window.location.host}/api/ws`);
+    socket.addEventListener("open", onOpen);
     socket.addEventListener("message", onMessage);
   });
 
   onDestroy(() => {
+    socket.removeEventListener("open", onOpen);
     socket.removeEventListener("message", onMessage);
     socket.close();
   });
@@ -298,6 +324,50 @@
               alt="live feed"
               style={`visibility: ${imgSrc ? "visible" : "hidden"}`}
             />
+          </Card.Content>
+        </Card.Root>
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Recordings</Card.Title>
+          </Card.Header>
+          <Card.Content>
+            <Table.Root>
+              <Table.Header>
+                <Table.Row>
+                  <Table.Head>Name</Table.Head>
+                  <Table.Head>Download</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {#await videosPromise}
+                  <!-- TODO: Use skeletons -->
+                  <span class="px-3 py-0 text-muted-foreground">Loading...</span
+                  >
+                {:then videos}
+                  {#each videos as video}
+                    <Table.Row data-video-id={video.video_id}>
+                      <Table.Cell class="font-semibold"
+                        >{video.file_path.split("/").at(-1)}</Table.Cell
+                      >
+                      <Table.Cell>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Download"
+                          data-video-id={video.video_id}
+                          href={`/api/videos/${video.video_id}`}
+                          download={video.file_path.split("/").at(-1)}
+                        >
+                          <Download class="h-4 w-4" />
+                        </Button>
+                      </Table.Cell>
+                    </Table.Row>
+                  {/each}
+                {:catch error}
+                  <p>{error.message}</p>
+                {/await}
+              </Table.Body>
+            </Table.Root>
           </Card.Content>
         </Card.Root>
       </div>

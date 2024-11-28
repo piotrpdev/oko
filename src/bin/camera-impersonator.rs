@@ -36,6 +36,11 @@ async fn main() -> ExitCode {
     let url = "ws://localhost:3000/api/ws".to_string();
     let (mut ws_stream, _) = connect_async(&url).await.unwrap();
 
+    ws_stream
+        .send(Message::Text("camera".to_string()))
+        .await
+        .unwrap();
+
     loop {
         if cap.read(&mut frame).unwrap() {
             sleep(SEND_INTERVAL).await;

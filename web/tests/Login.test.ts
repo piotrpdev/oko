@@ -98,4 +98,6 @@ describe("Cameras page", () => {
       expect(queryByText(testCamera1.camera_name)).not.toBeInTheDocument();
     });
   });
+
+  // TODO: Add test for recording list?
 });

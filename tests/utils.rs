@@ -46,7 +46,11 @@ pub async fn setup(
     playwright.prepare()?;
     let chromium = playwright.chromium();
     let browser = chromium.launcher().headless(true).launch().await?;
-    let context = browser.context_builder().build().await?;
+    let context = browser
+        .context_builder()
+        .accept_downloads(true)
+        .build()
+        .await?;
 
     let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await?;
     let addr = listener.local_addr()?;
