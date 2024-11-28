@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse, ws } from "msw";
 import { WebSocket } from "undici";
-import { Camera, User } from "./src/lib/userStore.ts";
+import { Camera, User, VideoCameraView } from "./src/lib/userStore.ts";
 
 Reflect.set(globalThis, "WebSocket", WebSocket);
 
@@ -44,6 +44,16 @@ export const testUserAndCameras = {
   cameras: testCameras,
 };
 
+export const testVideos: VideoCameraView[] = [
+  {
+    video_id: 2,
+    camera_id: 2,
+    camera_name: "Kitchen",
+    file_path: "2.mp4",
+    file_size: 6905856,
+  },
+];
+
 function timeoutPromise(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
@@ -62,6 +72,15 @@ export const handlers = [
   }),
   http.get("/api/cameras", () => {
     return HttpResponse.json(testCameras);
+  }),
+  http.get("/api/cameras/:cameraId/videos", ({ params: { cameraId } }) => {
+    const parsedCameraId = Number(cameraId);
+
+    const videos = testVideos.filter(
+      (video) => video.camera_id == parsedCameraId,
+    );
+
+    return HttpResponse.json(videos);
   }),
   http.post("/api/cameras", async ({ request }) => {
     const requestBody = await request.formData();

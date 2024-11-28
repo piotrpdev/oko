@@ -19,4 +19,12 @@ export type UserAndCameras = {
   cameras: Array<Camera>;
 };
 
+export type VideoCameraView = {
+  video_id: number;
+  camera_id: number;
+  camera_name: string;
+  file_path: string;
+  file_size: number;
+};
+
 export const user = writable("user", null as UserAndCameras | null);

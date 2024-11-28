@@ -15,7 +15,7 @@
   import { Label } from "$lib/components/ui/label/index.js";
 
   import { replace } from "svelte-spa-router";
-  import { user, type Camera } from "../lib/userStore";
+  import { user, type Camera, type VideoCameraView } from "../lib/userStore";
   import { onDestroy, onMount } from "svelte";
   import { Badge } from "$lib/components/ui/badge";
   import * as Table from "$lib/components/ui/table/index.js";
@@ -116,14 +116,6 @@
   let videosPromise = getVideos(2);
 
   const refreshVideos = () => (videosPromise = getVideos(2));
-
-  type VideoCameraView = {
-    video_id: number;
-    camera_id: number;
-    camera_name: string;
-    file_path: string;
-    file_size: number;
-  };
 
   async function getVideos(cameraId: number): Promise<VideoCameraView[]> {
     const response = await fetch(`/api/cameras/${cameraId}/videos`);
@@ -364,6 +356,7 @@
                           aria-label="Download"
                           data-video-id={video.video_id}
                           href={`/api/videos/${video.video_id}`}
+                          download={video.file_path.split("/").at(-1)}
                         >
                           <Download class="h-4 w-4" />
                         </Button>
