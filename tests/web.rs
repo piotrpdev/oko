@@ -1,87 +1,31 @@
-use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 
 use futures::SinkExt;
-use oko::App;
-use playwright::{
-    api::{frame::FrameState, BrowserContext},
-    Playwright,
+use oko::Video;
+use opencv::{
+    core::{Mat, MatTraitConstManual},
+    imgcodecs::{imdecode, IMREAD_COLOR},
+    videoio::{
+        VideoCapture, VideoCaptureTrait, VideoCaptureTraitConst, CAP_ANY, CAP_PROP_FRAME_COUNT,
+    },
 };
+use playwright::api::frame::FrameState;
 use sqlx::SqlitePool;
-use tokio::{
-    net::{TcpListener, TcpStream},
-    time::{sleep, Duration},
-};
-use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
+use tokio::time::{sleep, Duration};
+use tokio_tungstenite::tungstenite::Message;
+
+#[path = "./utils.rs"]
+mod utils;
 
 // TODO: Add tests for the WebSocket routes
 // ? Should these tests be run sequentially? Too many simultaneous instances of Chromium might be an issue.
-
-const TEST_IMG_1: [u8; 1] = [1];
-const TEST_IMG_2: [u8; 1] = [2];
-
-#[allow(dead_code)]
-struct TestCamera {
-    camera_id: i32,
-    name: &'static str,
-}
-
-#[allow(dead_code)]
-const TEST_CAMERA_1: TestCamera = TestCamera {
-    camera_id: 1,
-    name: "Front Door",
-};
-
-#[allow(dead_code)]
-const TEST_CAMERA_2: TestCamera = TestCamera {
-    camera_id: 2,
-    name: "Kitchen",
-};
-
-#[allow(dead_code)]
-const TEST_CAMERA_3: TestCamera = TestCamera {
-    camera_id: 3,
-    name: "Backyard",
-};
-
-async fn setup(
-    pool: SqlitePool,
-) -> Result<
-    (Playwright, BrowserContext, String, SocketAddr),
-    Box<dyn std::error::Error + Send + Sync>,
-> {
-    let playwright = Playwright::initialize().await?;
-    playwright.prepare()?;
-    let chromium = playwright.chromium();
-    let browser = chromium.launcher().headless(true).launch().await?;
-    let context = browser.context_builder().build().await?;
-
-    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await?;
-    let addr = listener.local_addr()?;
-    let addr_str = format!("http://{addr}/");
-
-    let app = App { db: pool, listener };
-    tokio::spawn(app.serve());
-
-    Ok((playwright, context, addr_str, addr))
-}
-
-async fn setup_ws(
-    addr: SocketAddr,
-) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn std::error::Error + Send + Sync>> {
-    let url = format!("ws://{addr}/api/ws");
-    let Ok((ws_stream, _)) = connect_async(&url).await else {
-        return Err("Failed to connect to WebSocket".into());
-    };
-
-    Ok(ws_stream)
-}
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
     scripts("users", "cameras", "camera_permissions")
 ))]
 async fn home_redirect(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (_p, context, addr_str, _) = setup(pool).await?;
+    let (_p, context, addr_str, _, _video_temp_dir) = utils::setup(&pool).await?;
 
     let page = context.new_page().await?;
     page.goto_builder(&addr_str).goto().await?;
@@ -99,7 +43,7 @@ async fn home_redirect(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error
 async fn login_and_logout(
     pool: SqlitePool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (_p, context, addr_str, _) = setup(pool).await?;
+    let (_p, context, addr_str, _, _video_temp_dir) = utils::setup(&pool).await?;
 
     let page = context.new_page().await?;
     page.goto_builder(&(addr_str.clone() + "#/login"))
@@ -132,7 +76,7 @@ async fn login_and_logout(
     scripts("users", "cameras", "camera_permissions")
 ))]
 async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (_p, context, addr_str, addr) = setup(pool).await?;
+    let (_p, context, addr_str, addr, _video_temp_dir) = utils::setup(&pool).await?;
 
     let page = context.new_page().await?;
     page.goto_builder(&(addr_str.clone() + "#/login"))
@@ -156,9 +100,11 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
         return Err("src attribute found too early".into());
     };
 
-    let mut ws_stream = setup_ws(addr).await?;
+    let mut ws_stream = utils::setup_ws(addr).await?;
 
-    ws_stream.send(Message::Binary(TEST_IMG_1.into())).await?;
+    ws_stream
+        .send(Message::Binary(utils::TEST_IMG_1.into()))
+        .await?;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -168,7 +114,9 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
 
     assert!(src.contains("blob:"));
 
-    ws_stream.send(Message::Binary(TEST_IMG_2.into())).await?;
+    ws_stream
+        .send(Message::Binary(utils::TEST_IMG_2.into()))
+        .await?;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -189,7 +137,7 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
 async fn camera_add_remove(
     pool: SqlitePool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (_p, context, addr_str, _addr) = setup(pool).await?;
+    let (_p, context, addr_str, _addr, _video_temp_dir) = utils::setup(&pool).await?;
 
     let page = context.new_page().await?;
     page.goto_builder(&(addr_str.clone() + "#/login"))
@@ -235,6 +183,76 @@ async fn camera_add_remove(
         .state(FrameState::Detached)
         .wait_for_selector()
         .await?;
+
+    Ok(())
+}
+
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions", "videos")
+))]
+async fn record(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, _context, _addr_str, addr, video_temp_dir) = utils::setup(&pool).await?;
+
+    let camera_list = Video::list_for_camera(&pool, 2).await?;
+    assert_eq!(camera_list.len(), 1);
+
+    let video_path = video_temp_dir.path();
+    let file_count = video_path.read_dir()?.count();
+
+    let mut ws_stream = utils::setup_ws(addr).await?;
+
+    let sent_frame_count = 20;
+
+    for _ in 0..sent_frame_count {
+        ws_stream
+            .send(Message::Binary(utils::REAL_TEST_IMG_1.into()))
+            .await?;
+
+        sleep(Duration::from_millis(80)).await;
+    }
+
+    ws_stream.close(None).await?;
+    sleep(Duration::from_millis(80)).await;
+
+    let new_camera_list = Video::list_for_camera(&pool, 2).await?;
+    assert_eq!(new_camera_list.len(), 2);
+
+    let new_file_count = video_path.read_dir()?.count();
+    // TODO: Update to `assert_eq!(new_file_count, file_count + 1);` after adding feat to not spawn record task on every ws connection
+    assert!(new_file_count > file_count);
+
+    let Some(newest_video) = new_camera_list.iter().max_by_key(|v| v.video_id) else {
+        return Err("No newest video found".into());
+    };
+
+    let created_video_path_str = newest_video.file_path.clone();
+    let created_video_pathbuf = PathBuf::from(&newest_video.file_path);
+    assert!(created_video_pathbuf.exists());
+
+    let mut created_video_cap = VideoCapture::from_file(&created_video_path_str, CAP_ANY)?;
+    if !created_video_cap.is_opened()? {
+        return Err("Failed to open video file".into());
+    }
+
+    let created_video_frame_count: f64 = created_video_cap.get(CAP_PROP_FRAME_COUNT)?;
+    let frame_count_diff = (created_video_frame_count - 20.0).abs();
+    assert!(frame_count_diff <= 3.0);
+
+    let mut created_video_frame = Mat::default();
+    if !created_video_cap.read(&mut created_video_frame)? {
+        return Err("Failed to read frame".into());
+    }
+
+    let created_video_frame_data = created_video_frame.data_bytes()?;
+
+    let decoded_test_image = imdecode(utils::REAL_TEST_IMG_1, IMREAD_COLOR)?;
+    let decoded_test_image_data = decoded_test_image.data_bytes()?;
+
+    assert_eq!(
+        created_video_frame_data.len(),
+        decoded_test_image_data.len()
+    );
 
     Ok(())
 }

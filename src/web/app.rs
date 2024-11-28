@@ -13,9 +13,20 @@ use axum_login::{
     AuthManagerLayerBuilder,
 };
 use futures::{SinkExt, StreamExt};
+use opencv::{
+    core::Size,
+    imgcodecs::{imdecode, IMREAD_COLOR},
+    videoio::{VideoWriter, VideoWriterTrait},
+};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
-use time::Duration;
-use tokio::{net::TcpListener, signal, sync::watch, task::AbortHandle};
+use time::{Duration, OffsetDateTime};
+use tokio::{
+    net::TcpListener,
+    signal,
+    sync::watch,
+    task::{AbortHandle, JoinHandle},
+};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
@@ -35,23 +46,29 @@ use axum::{
 };
 
 use crate::{
-    users::Backend,
+    users::{AuthSession, Backend},
     web::{auth, protected},
+    Model, Video,
 };
+
+const SQLITE_URL: &str = "sqlite://data.db";
+const VIDEO_PATH: &str = "./videos/";
 
 struct AppState {
     images_tx: watch::Sender<Message>,
+    video_path: PathBuf,
 }
 
 pub struct App {
     pub db: SqlitePool,
     pub listener: TcpListener,
+    pub video_path: PathBuf,
 }
 
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let sqlite_connect_options =
-            SqliteConnectOptions::from_str("sqlite://data.db")?.create_if_missing(true);
+            SqliteConnectOptions::from_str(SQLITE_URL)?.create_if_missing(true);
 
         let db = SqlitePool::connect_with(sqlite_connect_options).await?;
 
@@ -61,7 +78,14 @@ impl App {
 
         let listener = tokio::net::TcpListener::bind(addr).await?;
 
-        Ok(Self { db, listener })
+        let video_path_relative = PathBuf::from(VIDEO_PATH);
+        let video_path = video_path_relative.canonicalize()?;
+
+        Ok(Self {
+            db,
+            listener,
+            video_path,
+        })
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -98,7 +122,10 @@ impl App {
         // TODO: Use better default message
         let tx = watch::Sender::new(Message::Text("Hello, world!".to_string()));
 
-        let state = Arc::new(AppState { images_tx: tx });
+        let state = Arc::new(AppState {
+            images_tx: tx,
+            video_path: self.video_path,
+        });
 
         let main_router = Router::new()
             .route("/api/ws", axum::routing::any(ws_handler))
@@ -125,6 +152,8 @@ impl App {
         Ok(())
     }
 }
+
+// ? Maybe move all functions below into App impl block, then use `self` for db pool
 
 async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let ctrl_c = async {
@@ -165,17 +194,111 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     state: State<Arc<AppState>>,
+    auth_session: AuthSession,
 ) -> impl IntoResponse {
     println!("{addr} connected to ws_handler.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state, auth_session))
 }
 
 // TODO: Use tracing instead of print in this function
 /// Actual websocket statemachine (one will be spawned per connection)
-async fn handle_socket(socket: WebSocket, who: SocketAddr, state: State<Arc<AppState>>) {
+#[allow(clippy::too_many_lines)]
+async fn handle_socket(
+    socket: WebSocket,
+    who: SocketAddr,
+    state: State<Arc<AppState>>,
+    auth_session: AuthSession,
+) {
     println!("{who} connected to handle_socket.");
+
+    // TODO: Update camera in DB to be online
+
+    let mut images_rx_rec = state.images_tx.subscribe();
+
+    let tracker = TaskTracker::new();
+    let recording_token = CancellationToken::new();
+    let recording_token_clone = recording_token.clone();
+    let video_path = state.video_path.clone();
+
+    // TODO: Init watch message may be consumed by any of the tasks, find way to avoid being off by one.
+    //  Always ignoring the first message in every task is maybe not the best solution.
+
+    // ? Maybe use spawn_blocking here, be aware .abort() is not available on blocking tasks
+    // TODO: Handle stopping recording properly
+    // TODO: Inform client/db if recording fails
+    // TODO: Find out which is better, ingesting encoded or decoded images
+    // TODO: Don't spawn record task for every websocket connection, only some are cameras
+    let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
+        tracker.spawn(async move {
+            let now = Video::DEFAULT.start_time();
+            let formatted_now = now.format(Video::DEFAULT.file_name_format)?;
+            let file_pathbuf = video_path.join(format!("{formatted_now}.avi"));
+
+            // TODO: Lookup camera_id from DB
+            // TODO: Use proper user customizable file path, ability to pass tempdir for tests would be nice
+            let mut video = Video {
+                video_id: Video::DEFAULT.video_id,
+                camera_id: Some(2),
+                file_path: file_pathbuf.to_string_lossy().to_string(),
+                start_time: now,
+                end_time: Video::DEFAULT.end_time,
+                file_size: None,
+            };
+
+            #[allow(clippy::unwrap_used)]
+            video.create_using_self(&auth_session.backend.db).await?;
+
+            // TODO: Don't hardcode these
+            let video_fourcc = VideoWriter::fourcc('m', 'p', '4', 'v')?;
+            let video_size = Size::new(800, 600);
+            let mut video_writer =
+                VideoWriter::new_def(&video.file_path, video_fourcc, 12.5, video_size)?;
+
+            let mut total_bytes = 0;
+
+            let mut first_received = false;
+            // TODO: Adding a sleep might be a good idea?
+            loop {
+                // TODO: this might not be the best way of doing this
+                let message = (*images_rx_rec.borrow_and_update()).clone();
+                let message_data_vec = message.into_data();
+                let message_data_vec_slice = message_data_vec.as_slice();
+                let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
+
+                if first_received {
+                    println!("Recording image from {who}...");
+                    // TODO: Handle error here
+                    // ? Does calling this function too often/quickly risk a crash? Use a buffer/batch?
+                    video_writer.write(&decoded_image)?;
+                    total_bytes += message_data_vec_slice.len();
+                }
+
+                tokio::select! {
+                    c = images_rx_rec.changed() => {
+                        if c.is_err() {
+                            break;
+                        }
+                    },
+                    () = recording_token.cancelled() => {
+                        break;
+                    }
+                }
+
+                first_received = true;
+            }
+
+            video.end_time = Some(OffsetDateTime::now_utc());
+            video.file_size = Some(total_bytes.try_into()?);
+
+            video.update_using_self(&auth_session.backend.db).await?;
+            println!("Recording finished for {who}...");
+
+            Ok(())
+        });
+
+    tracker.close();
 
     let mut images_rx = state.images_tx.subscribe();
 
@@ -242,6 +365,8 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: State<Arc<AppS
                 Err(a) => println!("Error sending messages {a:?}")
             }
             recv_task.abort();
+            recording_token_clone.cancel();
+            tracker.wait().await;
         },
         rv_b = (&mut recv_task) => {
             match rv_b {
@@ -249,8 +374,19 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: State<Arc<AppS
                 Err(b) => println!("Error receiving messages {b:?}")
             }
             send_task.abort();
+            recording_token_clone.cancel();
+            tracker.wait().await;
+        },
+        rv_c = (&mut recording_task) => {
+            match rv_c {
+                Ok(_) => println!("recording_task finished for {who}"),
+                Err(c) => println!("Error recording images {c:?}")
+            }
+            // ? Maybe do something if recording fails e.g. send a message to the client/DB
         }
     }
+
+    // TODO: Update camera in DB to be offline
 
     // returning from the handler closes the websocket connection
     println!("Websocket context {who} destroyed");
