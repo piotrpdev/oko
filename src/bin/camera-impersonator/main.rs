@@ -3,14 +3,17 @@
 use std::env;
 use std::process::ExitCode;
 
+use camera_impersonator::same_port_connect;
 use futures::SinkExt;
 use opencv::core::{Mat, Vector};
 use opencv::imgcodecs::imencode_def;
 use opencv::prelude::*;
 use opencv::videoio::{VideoCapture, VideoCaptureTraitConst, CAP_ANY};
 use tokio::time::{sleep, Duration};
-use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
+
+mod camera_impersonator;
 
 const USAGE_MESSAGE: &str = "Usage: camera-impersonator <path_to_video_file>";
 const SEND_INTERVAL: Duration = Duration::from_millis(80);
@@ -33,8 +36,10 @@ async fn main() -> ExitCode {
 
     let mut frame = Mat::default();
 
-    let url = "ws://localhost:3000/api/ws".to_string();
-    let (mut ws_stream, _) = connect_async(&url).await.unwrap();
+    let url = "ws://127.0.0.1:3000/api/ws".to_string();
+    let (mut ws_stream, _) = same_port_connect(url.into_client_request().unwrap(), 40000)
+        .await
+        .unwrap();
 
     ws_stream
         .send(Message::Text("camera".to_string()))
