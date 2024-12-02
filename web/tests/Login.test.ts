@@ -1,9 +1,11 @@
 import { fireEvent, render, waitFor } from "@testing-library/svelte";
 import { describe, test, expect } from "vitest";
-import Home from "../src/routes/Home.svelte";
+import Cameras from "../src/routes/Cameras.svelte";
+import CameraAndVideos from "../src/lib/components/CameraAndVideos.svelte";
 import Login from "../src/routes/Login.svelte";
 import { get, Writable } from "svelte/store";
-import { user } from "../src/lib/userStore";
+import { socket } from "../src/lib/stores/socketStore";
+import { user } from "../src/lib/stores/userStore";
 import { testCamera1, testCameras, testUserAndCameras } from "../vitest-setup";
 
 // https://testing-library.com/docs/queries/about/
@@ -45,8 +47,12 @@ describe("Cameras page", () => {
     const liveFeedAltText = "live feed";
 
     user.set(testUserAndCameras);
+    socket.set(new WebSocket("ws://localhost:3000/api/ws"));
 
-    const { getByAltText } = render(Home);
+    const { getByAltText } = render(CameraAndVideos, {
+      cameraId: 2,
+      cameraName: "Kitchen",
+    });
 
     const liveFeedImg = getByAltText(liveFeedAltText);
 
@@ -68,7 +74,7 @@ describe("Cameras page", () => {
   test("camera list updates when camera is added/removed", async () => {
     user.set(testUserAndCameras);
 
-    const { getByText, queryByText, getAllByLabelText } = render(Home);
+    const { getByText, queryByText, getAllByLabelText } = render(Cameras);
 
     expect(queryByText(testCameras[0].camera_name)).not.toBeInTheDocument();
 

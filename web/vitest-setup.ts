@@ -3,12 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse, ws } from "msw";
 import { WebSocket } from "undici";
-import {
-  Camera,
-  ImageContainer,
-  User,
-  VideoCameraView,
-} from "./src/lib/userStore.ts";
+import { Camera, ImageContainer, User, VideoCameraView } from "./src/types.ts";
 
 Reflect.set(globalThis, "WebSocket", WebSocket);
 
@@ -127,6 +122,7 @@ export const handlers = [
   api_ws.addEventListener("connection", async ({ client }) => {
     console.log("WebSocket connection established");
     // https://stackoverflow.com/a/16245768/19020549
+    testImgContainer1.camera_id = 2;
     client.send(JSON.stringify(testImgContainer1));
     // ? There might be a better way that doesn't involve waiting
     await timeoutPromise(100);

@@ -11,10 +11,15 @@
   // TODO: Add transitions to everything
   // TODO: Replace console.error and log with toast notifications
   // TODO: Stop relying on default form values
+  // TODO: Add 404 page
 
   // TODO: Make these async
   const routes = {
     "/": wrap({
+      component: Cameras,
+      conditions: [() => false],
+    }),
+    "/cameras": wrap({
       component: Cameras,
       conditions: [
         () =>

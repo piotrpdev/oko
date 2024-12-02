@@ -60,7 +60,7 @@ async fn login_and_logout(
         .await?;
 
     let s: String = page.eval("() => location.href").await?;
-    assert_eq!(s, (addr_str.clone() + "#/"));
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
 
     page.click_builder("div#logout").click().await?;
 
@@ -93,10 +93,14 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
         .await?;
 
     let s: String = page.eval("() => location.href").await?;
-    assert_eq!(s, (addr_str.clone() + "#/"));
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
 
     page.wait_for_selector_builder("div#logout")
         .wait_for_selector()
+        .await?;
+
+    page.click_builder("button[aria-label=\"View Camera\"][data-camera-id=\"2\"]")
+        .click()
         .await?;
 
     let None = page.get_attribute("img#live-feed", "src", None).await? else {
@@ -156,17 +160,29 @@ async fn camera_add_remove(
         .await?;
 
     let s: String = page.eval("() => location.href").await?;
-    assert_eq!(s, (addr_str.clone() + "#/"));
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
 
     page.wait_for_selector_builder("div#logout")
         .wait_for_selector()
         .await?;
 
-    if !page.is_visible("a[data-camera-id=\"1\"]", None).await? {
+    if !page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"1\"]",
+            None,
+        )
+        .await?
+    {
         return Err("Front Door camera not found".into());
     };
 
-    if page.is_visible("a[data-camera-id=\"3\"]", None).await? {
+    if page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"3\"]",
+            None,
+        )
+        .await?
+    {
         return Err("Backyard camera found too early".into());
     };
 
@@ -176,7 +192,7 @@ async fn camera_add_remove(
         .click()
         .await?;
 
-    page.wait_for_selector_builder("a[data-camera-id=\"3\"]")
+    page.wait_for_selector_builder("button[aria-label=\"View Camera\"][data-camera-id=\"3\"]")
         .wait_for_selector()
         .await?;
 
@@ -184,7 +200,7 @@ async fn camera_add_remove(
         .click()
         .await?;
 
-    page.wait_for_selector_builder("a[data-camera-id=\"3\"]")
+    page.wait_for_selector_builder("button[aria-label=\"View Camera\"][data-camera-id=\"3\"]")
         .state(FrameState::Detached)
         .wait_for_selector()
         .await?;
@@ -318,6 +334,10 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
         .await?;
 
     page.click_builder("button#login").click().await?;
+
+    page.click_builder("button[aria-label=\"View Camera\"][data-camera-id=\"2\"]")
+        .click()
+        .await?;
 
     page.wait_for_selector_builder("a[data-video-id=\"3\"]")
         .wait_for_selector()

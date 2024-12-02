@@ -1,28 +1,20 @@
 <script lang="ts">
   import Trash from "lucide-svelte/icons/trash";
   import CirclePlus from "lucide-svelte/icons/circle-plus";
-  import Download from "lucide-svelte/icons/download";
-  import RotateCw from "lucide-svelte/icons/rotate-cw";
 
   import { Button, buttonVariants } from "$lib/components/ui/button/index.js";
-  import * as Card from "$lib/components/ui/card/index.js";
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
 
   import { user } from "../lib/stores/userStore";
-  import { onDestroy, onMount } from "svelte";
-  import * as Table from "$lib/components/ui/table/index.js";
   import DashboardLayout from "$lib/layouts/DashboardLayout.svelte";
-  import { socket } from "$lib/stores/socketStore";
-  import {
-    isImageContainer,
-    type Camera,
-    type VideoCameraView,
-  } from "../types";
+  import { type Camera } from "../types";
+  import CameraAndVideos from "$lib/components/CameraAndVideos.svelte";
+  import { link } from "svelte-spa-router";
 
-  let frameCount = 0;
-  let imgSrc: string = "";
+  let selectedCameraId: number | null = null;
+  let selectedCameraName: string | null = null;
 
   let name = "Backyard";
   let address = "192.168.0.30";
@@ -81,49 +73,6 @@
       console.error("Remove Camera failed");
     }
   }
-
-  let videosPromise = getVideos(2);
-
-  const refreshVideos = () => (videosPromise = getVideos(2));
-
-  async function getVideos(cameraId: number): Promise<VideoCameraView[]> {
-    const response = await fetch(`/api/cameras/${cameraId}/videos`);
-
-    if (response.ok) {
-      const data = await response.json();
-      return data;
-    } else {
-      console.error("Failed to fetch videos");
-      throw new Error("Failed to fetch videos");
-    }
-  }
-
-  function onMessage(event: MessageEvent) {
-    const data = event.data;
-
-    try {
-      const parsed_msg = JSON.parse(data);
-
-      if (isImageContainer(parsed_msg)) {
-        console.log("Frame received");
-        frameCount++;
-        const bytes = new Uint8Array(parsed_msg.image_bytes);
-        const blob = new Blob([bytes], { type: "image/jpeg" });
-        const url = URL.createObjectURL(blob);
-        imgSrc = url;
-      }
-    } catch (e) {
-      console.error("Failed to parse WebSocket message JSON");
-    }
-  }
-
-  onMount(() => {
-    $socket?.addEventListener("message", onMessage);
-  });
-
-  onDestroy(() => {
-    $socket?.removeEventListener("message", onMessage);
-  });
 </script>
 
 <DashboardLayout tab="Cameras">
@@ -143,14 +92,21 @@
       {:then cameras}
         {#each cameras as camera}
           <div class="group flex items-center gap-3 rounded-lg px-3 py-0">
-            <a
-              href="##"
+            <Button
+              on:click={() => {
+                selectedCameraId = camera.camera_id;
+                selectedCameraName = camera.camera_name;
+              }}
               data-camera-id={camera.camera_id}
-              class={"text-muted-foreground transition-all hover:text-primary" +
-                (camera.camera_name === "Kitchen"
+              aria-label="View Camera"
+              class={"h-0 px-0 py-1 font-normal text-muted-foreground transition-all hover:text-primary hover:no-underline" +
+                (camera.camera_id === selectedCameraId
                   ? " font-semibold text-primary"
-                  : "")}>{camera.camera_name}</a
+                  : "")}
+              variant="link"
             >
+              {camera.camera_name}
+            </Button>
             <Button
               on:click={() => removeCamera(camera.camera_id)}
               variant="ghost"
@@ -209,77 +165,12 @@
       {/await}
     </nav>
     <div class="grid gap-6">
-      <Card.Root>
-        <Card.Header>
-          <Card.Title>Kitchen</Card.Title>
-          <Card.Description>
-            Frame: {frameCount}
-          </Card.Description>
-        </Card.Header>
-        <Card.Content>
-          <!-- TODO: Add placeholder image/skeleton -->
-          <!-- TODO: Maybe use known camera resolution as aspect ratio when camera is offline -->
-          <img
-            id="live-feed"
-            class="aspect-[4/3]"
-            src={imgSrc}
-            alt="live feed"
-            style={`visibility: ${imgSrc ? "visible" : "hidden"}`}
-          />
-        </Card.Content>
-      </Card.Root>
-      <Card.Root>
-        <Card.Header class="flex flex-row items-center">
-          <Card.Title>Recordings</Card.Title>
-          <Button
-            on:click={() => refreshVideos()}
-            aria-label="Refresh"
-            variant="outline"
-            size="icon"
-            class="!mt-0 ml-auto"
-          >
-            <RotateCw class="h-4 w-4" />
-          </Button>
-        </Card.Header>
-        <Card.Content>
-          <Table.Root>
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Name</Table.Head>
-                <Table.Head>Download</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {#await videosPromise}
-                <!-- TODO: Use skeletons -->
-                <span class="px-3 py-0 text-muted-foreground">Loading...</span>
-              {:then videos}
-                {#each videos as video}
-                  <Table.Row data-video-id={video.video_id}>
-                    <Table.Cell class="font-semibold"
-                      >{video.file_path.split("/").at(-1)}</Table.Cell
-                    >
-                    <Table.Cell>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label="Download"
-                        data-video-id={video.video_id}
-                        href={`/api/videos/${video.video_id}`}
-                        download={video.file_path.split("/").at(-1)}
-                      >
-                        <Download class="h-4 w-4" />
-                      </Button>
-                    </Table.Cell>
-                  </Table.Row>
-                {/each}
-              {:catch error}
-                <p>{error.message}</p>
-              {/await}
-            </Table.Body>
-          </Table.Root>
-        </Card.Content>
-      </Card.Root>
+      {#if selectedCameraId !== null && selectedCameraName !== null}
+        <CameraAndVideos
+          cameraId={selectedCameraId}
+          cameraName={selectedCameraName}
+        />
+      {/if}
     </div>
   </div>
 </DashboardLayout>
