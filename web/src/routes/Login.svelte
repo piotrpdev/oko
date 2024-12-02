@@ -5,7 +5,7 @@
   import { Label } from "$lib/components/ui/label/index.js";
 
   import { replace } from "svelte-spa-router";
-  import { user } from "../lib/userStore";
+  import { user } from "../lib/stores/userStore";
 
   let username = "admin";
   let password = "hunter42";

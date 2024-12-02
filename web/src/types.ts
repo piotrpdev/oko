@@ -1,5 +1,3 @@
-import { writable } from "@macfja/svelte-persistent-store";
-
 export type User = {
   user_id: number;
   username: string;
@@ -44,5 +42,3 @@ export function isImageContainer(obj: unknown): obj is ImageContainer {
     Array.isArray(obj.image_bytes)
   );
 }
-
-export const user = writable("user", null as UserAndCameras | null);
