@@ -37,7 +37,7 @@ cargo run
 # Seed with test data
 cat fixtures/* | sqlite3 data.db
 # Send image frames
-cargo run --bin camera-impersonator ./videos/1.mp4
+cargo run --bin camera-impersonator 80 40001 ./videos/2.mp4
 ```
 
 ### Test

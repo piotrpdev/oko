@@ -3,7 +3,6 @@
 use std::env;
 use std::process::ExitCode;
 
-use camera_impersonator::same_port_connect;
 use futures::SinkExt;
 use opencv::core::{Mat, Vector};
 use opencv::imgcodecs::imencode_def;
@@ -13,17 +12,36 @@ use tokio::time::{sleep, Duration};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
-mod camera_impersonator;
+use oko::ws_utils::same_port_connect;
 
-const USAGE_MESSAGE: &str = "Usage: camera-impersonator <path_to_video_file>";
-const SEND_INTERVAL: Duration = Duration::from_millis(80);
+const USAGE_MESSAGE: &str =
+    "Usage: camera-impersonator <send_interval_ms> <client_port> <path_to_video_file>";
 
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::expect_used)]
 #[tokio::main]
 async fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
-    let Some(video_arg) = args.get(1) else {
+
+    if args.len() != 4 {
+        eprintln!("{USAGE_MESSAGE}");
+        return ExitCode::FAILURE;
+    }
+
+    // TODO: Default to 80ms
+    let send_interval_u64: u64 = args
+        .get(1)
+        .unwrap()
+        .parse()
+        .expect("Failed to parse send interval");
+    let send_interval = Duration::from_millis(send_interval_u64);
+    // TODO: Default to 40001
+    let client_port: u16 = args
+        .get(2)
+        .unwrap()
+        .parse()
+        .expect("Failed to parse client port");
+    let Some(video_arg) = args.get(3) else {
         eprintln!("{USAGE_MESSAGE}");
         return ExitCode::FAILURE;
     };
@@ -37,7 +55,7 @@ async fn main() -> ExitCode {
     let mut frame = Mat::default();
 
     let url = "ws://127.0.0.1:3000/api/ws".to_string();
-    let (mut ws_stream, _) = same_port_connect(url.into_client_request().unwrap(), 40000)
+    let (mut ws_stream, _) = same_port_connect(url.into_client_request().unwrap(), client_port)
         .await
         .unwrap();
 
@@ -48,7 +66,7 @@ async fn main() -> ExitCode {
 
     loop {
         if cap.read(&mut frame).unwrap() {
-            sleep(SEND_INTERVAL).await;
+            sleep(send_interval).await;
 
             let data = frame.data_bytes().unwrap();
             println!("Sending frame of size: {}", data.len());

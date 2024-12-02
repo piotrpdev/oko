@@ -120,6 +120,20 @@ impl Camera {
         .fetch_all(db)
         .await
     }
+
+    pub async fn get_using_ip(pool: &SqlitePool, ip_address: String) -> Result<Self> {
+        sqlx::query_as!(
+            Camera,
+            r#"
+            SELECT *
+            FROM cameras
+            WHERE ip_address = ?
+            "#,
+            ip_address
+        )
+        .fetch_one(pool)
+        .await
+    }
 }
 
 #[allow(clippy::unwrap_used)]
@@ -161,7 +175,7 @@ mod tests {
         assert_eq!(returned_camera.name, "Front Door");
         assert_eq!(
             returned_camera.ip_address,
-            Some("192.168.0.169".to_string())
+            Some("127.0.0.1:40000".to_string())
         );
         assert!(returned_camera.is_active);
 
@@ -233,6 +247,20 @@ mod tests {
         assert_eq!(returned_cameras.get(1).unwrap().camera_name, "Kitchen");
         assert!(!returned_cameras.get(1).unwrap().can_view);
         assert!(!returned_cameras.get(1).unwrap().can_control);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("cameras")))]
+    async fn get_using_ip(pool: SqlitePool) -> Result<()> {
+        let ip_address = "127.0.0.1:40000".to_string();
+
+        let returned_camera = Camera::get_using_ip(&pool, ip_address.clone()).await?;
+
+        assert_eq!(returned_camera.camera_id, 1);
+        assert_eq!(returned_camera.name, "Front Door");
+        assert_eq!(returned_camera.ip_address, Some(ip_address));
+        assert!(returned_camera.is_active);
 
         Ok(())
     }

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
 use oko::Video;
 use opencv::{
     core::{Mat, MatTraitConstManual},

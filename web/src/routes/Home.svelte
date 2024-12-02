@@ -15,7 +15,12 @@
   import { Label } from "$lib/components/ui/label/index.js";
 
   import { replace } from "svelte-spa-router";
-  import { user, type Camera, type VideoCameraView } from "../lib/userStore";
+  import {
+    isImageContainer,
+    user,
+    type Camera,
+    type VideoCameraView,
+  } from "../lib/userStore";
   import { onDestroy, onMount } from "svelte";
   import { Badge } from "$lib/components/ui/badge";
   import * as Table from "$lib/components/ui/table/index.js";
@@ -46,12 +51,19 @@
   function onMessage(event: MessageEvent) {
     const data = event.data;
 
-    if (data instanceof Blob) {
-      console.log("Frame received");
-      console.log(data);
-      frameCount++;
-      const url = URL.createObjectURL(data);
-      imgSrc = url;
+    try {
+      const parsed_msg = JSON.parse(data);
+
+      if (isImageContainer(parsed_msg)) {
+        console.log("Frame received");
+        frameCount++;
+        const bytes = new Uint8Array(parsed_msg.image_bytes);
+        const blob = new Blob([bytes], { type: "image/jpeg" });
+        const url = URL.createObjectURL(blob);
+        imgSrc = url;
+      }
+    } catch (e) {
+      console.error("Failed to parse WebSocket message JSON");
     }
   }
 

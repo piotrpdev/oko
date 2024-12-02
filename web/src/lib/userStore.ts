@@ -27,4 +27,22 @@ export type VideoCameraView = {
   file_size: number;
 };
 
+export type ImageContainer = {
+  camera_id: number;
+  timestamp: number;
+  image_bytes: Array<number>;
+};
+
+export function isImageContainer(obj: unknown): obj is ImageContainer {
+  return (
+    obj instanceof Object &&
+    "camera_id" in obj &&
+    "timestamp" in obj &&
+    "image_bytes" in obj &&
+    typeof obj.camera_id === "number" &&
+    typeof obj.timestamp === "number" &&
+    Array.isArray(obj.image_bytes)
+  );
+}
+
 export const user = writable("user", null as UserAndCameras | null);
