@@ -45,8 +45,6 @@
       const parsed_msg = JSON.parse(data);
 
       if (isImageContainer(parsed_msg)) {
-        console.log(`Frame received for camera ${parsed_msg.camera_id}`);
-
         if (parsed_msg.camera_id !== cameraId) {
           return;
         }

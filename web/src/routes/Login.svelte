@@ -37,7 +37,7 @@
         console.error("Failed to get data");
       }
 
-      replace("/cameras");
+      replace("/");
     } else {
       console.error("Login failed");
     }

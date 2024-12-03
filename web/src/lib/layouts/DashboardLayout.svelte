@@ -13,6 +13,7 @@
   import { user } from "../stores/userStore";
 
   let tabs = [
+    { name: "Home", href: "/" },
     { name: "Cameras", href: "/cameras" },
     { name: "Settings", href: "/settings" },
   ];

@@ -22,6 +22,7 @@ mod utils;
 
 // TODO: Add tests for the WebSocket routes
 // ? Should these tests be run sequentially? Too many simultaneous instances of Chromium might be an issue.
+// TODO: Add wait for every page navigation
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
@@ -60,7 +61,7 @@ async fn login_and_logout(
         .await?;
 
     let s: String = page.eval("() => location.href").await?;
-    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+    assert_eq!(s, (addr_str.clone() + "#/"));
 
     page.click_builder("div#logout").click().await?;
 
@@ -93,11 +94,16 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
         .await?;
 
     let s: String = page.eval("() => location.href").await?;
-    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+    assert_eq!(s, (addr_str.clone() + "#/"));
 
     page.wait_for_selector_builder("div#logout")
         .wait_for_selector()
         .await?;
+
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
 
     page.click_builder("button[aria-label=\"View Camera\"][data-camera-id=\"2\"]")
         .click()
@@ -160,10 +166,19 @@ async fn camera_add_remove(
         .await?;
 
     let s: String = page.eval("() => location.href").await?;
-    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+    assert_eq!(s, (addr_str.clone() + "#/"));
 
     page.wait_for_selector_builder("div#logout")
         .wait_for_selector()
+        .await?;
+
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+
+    page.click_builder("button#user-menu-button")
+        .click()
         .await?;
 
     if !page
@@ -334,6 +349,11 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
         .await?;
 
     page.click_builder("button#login").click().await?;
+
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
 
     page.click_builder("button[aria-label=\"View Camera\"][data-camera-id=\"2\"]")
         .click()

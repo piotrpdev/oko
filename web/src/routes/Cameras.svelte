@@ -53,7 +53,6 @@
     });
 
     if (response.ok) {
-      console.log("Camera added");
       addCameraDialogOpen = false;
       refreshCameras();
     } else {
@@ -67,7 +66,6 @@
     });
 
     if (response.ok) {
-      console.log("Camera removed");
       refreshCameras();
     } else {
       console.error("Remove Camera failed");
