@@ -5,7 +5,9 @@ use playwright::{api::BrowserContext, Playwright};
 use sqlx::SqlitePool;
 use tempfile::{tempdir, TempDir};
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{tungstenite::client::IntoClientRequest, MaybeTlsStream, WebSocketStream};
+
+use oko::ws_utils::same_port_connect;
 
 pub const TEST_IMG_1: [u8; 1] = [1];
 pub const TEST_IMG_2: [u8; 1] = [2];
@@ -69,13 +71,20 @@ pub async fn setup(
     Ok((playwright, context, addr_str, addr, video_path))
 }
 
-pub async fn setup_ws(
+pub async fn setup_ws_with_port(
     addr: SocketAddr,
+    port: u16,
 ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn std::error::Error + Send + Sync>> {
     let url = format!("ws://{addr}/api/ws");
-    let Ok((ws_stream, _)) = connect_async(&url).await else {
+    let Ok((ws_stream, _)) = same_port_connect(url.into_client_request()?, port).await else {
         return Err("Failed to connect to WebSocket".into());
     };
 
     Ok(ws_stream)
+}
+
+pub async fn setup_ws(
+    addr: SocketAddr,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn std::error::Error + Send + Sync>> {
+    setup_ws_with_port(addr, 40001).await
 }

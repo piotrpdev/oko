@@ -18,6 +18,7 @@ use opencv::{
     imgcodecs::{imdecode, IMREAD_COLOR},
     videoio::{VideoWriter, VideoWriterTrait},
 };
+use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::{Duration, OffsetDateTime};
 use tokio::{
@@ -48,11 +49,20 @@ use axum::{
 use crate::{
     users::{AuthSession, Backend},
     web::{auth, protected},
-    Model, Video,
+    Camera, Model, Video,
 };
 
 const SQLITE_URL: &str = "sqlite://data.db";
 const VIDEO_PATH: &str = "./videos/";
+
+// ? Maybe move this somewhere better
+// TODO: Probably change to Protobuf instead of JSON
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ImageContainer {
+    pub camera_id: i64,
+    pub timestamp: i64,
+    pub image_bytes: Vec<u8>,
+}
 
 struct AppState {
     images_tx: watch::Sender<Message>,
@@ -226,6 +236,7 @@ async fn handle_socket(
     //  Always ignoring the first message in every task is maybe not the best solution.
 
     let mut is_camera = false;
+    let mut camera_id: i64 = -1;
 
     if let Some(msg) = socket.recv().await {
         if let Ok(msg) = msg {
@@ -252,6 +263,17 @@ async fn handle_socket(
         }
     }
 
+    if is_camera {
+        let Ok(db_camera) = Camera::get_using_ip(&auth_session.backend.db, who.to_string()).await
+        else {
+            // TODO: Inform client/db if camera not found (both web user and ws connection), also find better way to exit here?
+            println!("Camera not found in DB, aborting...");
+            return;
+        };
+
+        camera_id = db_camera.camera_id;
+    }
+
     // ? Maybe use spawn_blocking here, be aware .abort() is not available on blocking tasks
     // ? Maybe assume is camera if IP belongs to camera in DB
     // TODO: Handle stopping recording properly
@@ -259,6 +281,7 @@ async fn handle_socket(
     // TODO: Find out which is better, ingesting encoded or decoded images
     let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if is_camera {
+            // TODO: Check if errors are returned properly here, had some issues with the ? operator being silent
             tracker.spawn(async move {
                 let now = Video::DEFAULT.start_time();
                 let formatted_now = now.format(Video::DEFAULT.file_name_format)?;
@@ -268,14 +291,13 @@ async fn handle_socket(
                 // TODO: Use proper user customizable file path, ability to pass tempdir for tests would be nice
                 let mut video = Video {
                     video_id: Video::DEFAULT.video_id,
-                    camera_id: Some(2),
+                    camera_id: Some(camera_id),
                     file_path: file_pathbuf.to_string_lossy().to_string(),
                     start_time: now,
                     end_time: Video::DEFAULT.end_time,
                     file_size: None,
                 };
 
-                #[allow(clippy::unwrap_used)]
                 video.create_using_self(&auth_session.backend.db).await?;
 
                 // TODO: Don't hardcode these
@@ -291,12 +313,17 @@ async fn handle_socket(
                 loop {
                     // TODO: this might not be the best way of doing this
                     let message = (*images_rx_rec.borrow_and_update()).clone();
-                    let message_data_vec = message.into_data();
-                    let message_data_vec_slice = message_data_vec.as_slice();
-                    let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
+                    let message_text = message.into_text()?;
 
                     if first_received {
                         println!("Recording image from {who}...");
+                        let message_parsed_json =
+                            serde_json::from_str::<ImageContainer>(&message_text)?;
+                        let message_data_vec = message_parsed_json.image_bytes;
+                        // let message_data_vec = message.into_data();
+                        let message_data_vec_slice = message_data_vec.as_slice();
+                        let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
+
                         // TODO: Handle error here
                         // ? Does calling this function too often/quickly risk a crash? Use a buffer/batch?
                         video_writer.write(&decoded_image)?;
@@ -360,6 +387,7 @@ async fn handle_socket(
             if first_received {
                 println!("Sending message to {who}...");
                 // TODO: Don't send images to cameras. Maybe use a room system?
+                // TODO: Don't send to users without camera permission
                 // TODO: Handle error here
                 let _ = sender.send(message).await;
             }
@@ -395,8 +423,22 @@ async fn handle_socket(
                 break;
             }
 
-            // TODO: Make sure msg is Binary
-            let _ = state.images_tx.send(msg);
+            if is_camera {
+                // TODO: Make sure msg is Binary
+                let img_container = ImageContainer {
+                    camera_id,
+                    timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+                    image_bytes: msg.into_data(),
+                };
+                // ? Storing as string here might not be the best idea
+                let Ok(img_container_json) = serde_json::to_string(&img_container) else {
+                    println!("Error serializing image container to JSON");
+                    continue;
+                };
+                let img_container_json_msg = Message::Text(img_container_json.clone());
+
+                let _ = state.images_tx.send(img_container_json_msg);
+            }
         }
     });
 
@@ -439,7 +481,12 @@ async fn handle_socket(
 fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), ()> {
     match msg {
         Message::Text(t) => {
-            println!(">>> {who} sent str: {t:?}");
+            if t.len() > 100 {
+                let short_t = &t[..100];
+                println!(">>> {who} sent str: {short_t}...");
+            } else {
+                println!(">>> {who} sent str: {t:?}");
+            }
         }
         Message::Binary(d) => {
             println!(">>> {} sent {} bytes", who, d.len());

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
 use oko::Video;
 use opencv::{
     core::{Mat, MatTraitConstManual},
@@ -22,6 +22,7 @@ mod utils;
 
 // TODO: Add tests for the WebSocket routes
 // ? Should these tests be run sequentially? Too many simultaneous instances of Chromium might be an issue.
+// TODO: Add wait for every page navigation
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
@@ -99,6 +100,15 @@ async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + S
         .wait_for_selector()
         .await?;
 
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+
+    page.click_builder("button[aria-label=\"View Camera\"][data-camera-id=\"2\"]")
+        .click()
+        .await?;
+
     let None = page.get_attribute("img#live-feed", "src", None).await? else {
         return Err("src attribute found too early".into());
     };
@@ -162,11 +172,32 @@ async fn camera_add_remove(
         .wait_for_selector()
         .await?;
 
-    if !page.is_visible("a[data-camera-id=\"1\"]", None).await? {
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    if !page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"1\"]",
+            None,
+        )
+        .await?
+    {
         return Err("Front Door camera not found".into());
     };
 
-    if page.is_visible("a[data-camera-id=\"3\"]", None).await? {
+    if page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"3\"]",
+            None,
+        )
+        .await?
+    {
         return Err("Backyard camera found too early".into());
     };
 
@@ -176,7 +207,7 @@ async fn camera_add_remove(
         .click()
         .await?;
 
-    page.wait_for_selector_builder("a[data-camera-id=\"3\"]")
+    page.wait_for_selector_builder("button[aria-label=\"View Camera\"][data-camera-id=\"3\"]")
         .wait_for_selector()
         .await?;
 
@@ -184,7 +215,7 @@ async fn camera_add_remove(
         .click()
         .await?;
 
-    page.wait_for_selector_builder("a[data-camera-id=\"3\"]")
+    page.wait_for_selector_builder("button[aria-label=\"View Camera\"][data-camera-id=\"3\"]")
         .state(FrameState::Detached)
         .wait_for_selector()
         .await?;
@@ -319,6 +350,15 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
 
     page.click_builder("button#login").click().await?;
 
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+
+    page.click_builder("button[aria-label=\"View Camera\"][data-camera-id=\"2\"]")
+        .click()
+        .await?;
+
     page.wait_for_selector_builder("a[data-video-id=\"3\"]")
         .wait_for_selector()
         .await?;
@@ -364,6 +404,85 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
         downloaded_video_frame_data.len(),
         decoded_test_image_data.len()
     );
+
+    Ok(())
+}
+
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions")
+))]
+async fn home_feeds(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, context, addr_str, addr, _video_temp_dir) = utils::setup(&pool).await?;
+
+    let page = context.new_page().await?;
+    page.goto_builder(&(addr_str.clone() + "#/login"))
+        .goto()
+        .await?;
+
+    page.click_builder("button#login").click().await?;
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/"));
+
+    page.wait_for_selector_builder("div#logout")
+        .wait_for_selector()
+        .await?;
+
+    let mut camera_1_ws_stream = utils::setup_ws_with_port(addr, 40000).await?;
+
+    camera_1_ws_stream
+        .send(Message::Text("camera".to_string()))
+        .await?;
+
+    camera_1_ws_stream
+        .send(Message::Binary(utils::TEST_IMG_1.into()))
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    let Some(src) = page
+        .get_attribute(
+            "img[alt=\"live camera feed\"][data-camera-id=\"1\"]",
+            "src",
+            None,
+        )
+        .await?
+    else {
+        return Err("No src attribute found".into());
+    };
+
+    assert!(src.contains("blob:"));
+
+    let mut camera_2_ws_stream = utils::setup_ws_with_port(addr, 40001).await?;
+
+    camera_2_ws_stream
+        .send(Message::Text("camera".to_string()))
+        .await?;
+
+    camera_2_ws_stream
+        .send(Message::Binary(utils::TEST_IMG_1.into()))
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    let Some(new_src) = page
+        .get_attribute(
+            "img[alt=\"live camera feed\"][data-camera-id=\"2\"]",
+            "src",
+            None,
+        )
+        .await?
+    else {
+        return Err("No src attribute found".into());
+    };
+
+    assert!(new_src.contains("blob:"));
+    assert_ne!(src, new_src);
 
     Ok(())
 }

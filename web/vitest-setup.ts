@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse, ws } from "msw";
 import { WebSocket } from "undici";
-import { Camera, User, VideoCameraView } from "./src/lib/userStore.ts";
+import { Camera, ImageContainer, User, VideoCameraView } from "./src/types.ts";
 
 Reflect.set(globalThis, "WebSocket", WebSocket);
 
@@ -61,6 +61,18 @@ function timeoutPromise(ms: number) {
 export const testBlob1 = new Blob([new Uint8Array([1])], { type: "image/jpg" });
 export const testBlob2 = new Blob([new Uint8Array([2])], { type: "image/jpg" });
 
+export const testImgContainer1: ImageContainer = {
+  camera_id: 1,
+  timestamp: 1634876400,
+  image_bytes: [1],
+};
+
+export const testImgContainer2: ImageContainer = {
+  camera_id: 2,
+  timestamp: 1634876400,
+  image_bytes: [2],
+};
+
 export const handlers = [
   http.post("/api/login", () => {
     return new Response(null, {
@@ -110,10 +122,16 @@ export const handlers = [
   api_ws.addEventListener("connection", async ({ client }) => {
     console.log("WebSocket connection established");
     // https://stackoverflow.com/a/16245768/19020549
-    client.send(testBlob1);
+    testImgContainer1.camera_id = 2;
+    client.send(JSON.stringify(testImgContainer1));
     // ? There might be a better way that doesn't involve waiting
     await timeoutPromise(100);
-    client.send(testBlob2);
+    client.send(JSON.stringify(testImgContainer2));
+    await timeoutPromise(100);
+    testImgContainer1.camera_id = 1;
+    await timeoutPromise(100);
+    testImgContainer2.camera_id = 1;
+    client.send(JSON.stringify(testImgContainer2));
   }),
 ];
 

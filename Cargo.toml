@@ -19,7 +19,7 @@ serde = "1"
 sqlx = { version = "0.8.1", features = ["sqlite", "time", "runtime-tokio"] }
 time = "0.3.30"
 tokio = { version = "1.34.0", features = ["full"] }
-tokio-tungstenite = "0.24.0"
+tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
 futures = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 headers = "0.4"
