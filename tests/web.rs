@@ -388,6 +388,7 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
 
     let downloaded_video_frame_count: f64 = downloaded_video_cap.get(CAP_PROP_FRAME_COUNT)?;
     let frame_count_diff = (downloaded_video_frame_count - 20.0).abs();
+    // ! This is flaky, can fail sometimes
     assert!(frame_count_diff <= 3.0);
 
     let mut downloaded_video_frame = Mat::default();
@@ -483,6 +484,122 @@ async fn home_feeds(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + 
 
     assert!(new_src.contains("blob:"));
     assert_ne!(src, new_src);
+
+    Ok(())
+}
+
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions", "videos")
+))]
+async fn multi_camera_record(
+    pool: SqlitePool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, _context, _addr_str, addr, video_temp_dir) = utils::setup(&pool).await?;
+
+    let video_list = Video::list_for_camera(&pool, 2).await?;
+    assert_eq!(video_list.len(), 1);
+
+    let video_path = video_temp_dir.path();
+    let file_count = video_path.read_dir()?.count();
+
+    let mut camera_1_ws_stream = utils::setup_ws_with_port(addr, 40000).await?;
+    let mut camera_2_ws_stream = utils::setup_ws_with_port(addr, 40001).await?;
+    camera_1_ws_stream
+        .send(Message::Text("camera".to_string()))
+        .await?;
+    camera_2_ws_stream
+        .send(Message::Text("camera".to_string()))
+        .await?;
+
+    let sent_frame_count = 20;
+
+    for _ in 0..sent_frame_count {
+        camera_1_ws_stream
+            .send(Message::Binary(utils::REAL_TEST_IMG_1.into()))
+            .await?;
+
+        camera_2_ws_stream
+            .send(Message::Binary(utils::REAL_TEST_IMG_2.into()))
+            .await?;
+
+        sleep(Duration::from_millis(80)).await;
+    }
+
+    camera_1_ws_stream.close(None).await?;
+    camera_2_ws_stream.close(None).await?;
+    sleep(Duration::from_millis(80)).await;
+
+    let camera_1_new_video_list = Video::list_for_camera(&pool, 1).await?;
+    let camera_2_new_video_list = Video::list_for_camera(&pool, 2).await?;
+    assert_eq!(camera_1_new_video_list.len(), 2);
+    assert_eq!(camera_2_new_video_list.len(), 2);
+
+    let new_file_count = video_path.read_dir()?.count();
+    assert_eq!(new_file_count, file_count + 2);
+
+    let Some(camera_1_newest_video) = camera_1_new_video_list.iter().max_by_key(|v| v.video_id)
+    else {
+        return Err("No newest video found".into());
+    };
+    let Some(camera_2_newest_video) = camera_2_new_video_list.iter().max_by_key(|v| v.video_id)
+    else {
+        return Err("No newest video found".into());
+    };
+
+    let camera_1_created_video_path_str = camera_1_newest_video.file_path.clone();
+    let camera_1_created_video_pathbuf = PathBuf::from(&camera_1_newest_video.file_path);
+    let camera_2_created_video_path_str = camera_2_newest_video.file_path.clone();
+    let camera_2_created_video_pathbuf = PathBuf::from(&camera_2_newest_video.file_path);
+    assert!(camera_1_created_video_pathbuf.exists());
+    assert!(camera_2_created_video_pathbuf.exists());
+
+    let mut camera_1_created_video_cap =
+        VideoCapture::from_file(&camera_1_created_video_path_str, CAP_ANY)?;
+    if !camera_1_created_video_cap.is_opened()? {
+        return Err("Failed to open video file".into());
+    }
+    let mut camera_2_created_video_cap =
+        VideoCapture::from_file(&camera_2_created_video_path_str, CAP_ANY)?;
+    if !camera_2_created_video_cap.is_opened()? {
+        return Err("Failed to open video file".into());
+    }
+
+    let camera_1_created_video_frame_count: f64 =
+        camera_1_created_video_cap.get(CAP_PROP_FRAME_COUNT)?;
+    let camera_1_frame_count_diff = (camera_1_created_video_frame_count - 20.0).abs();
+    let camera_2_created_video_frame_count: f64 =
+        camera_2_created_video_cap.get(CAP_PROP_FRAME_COUNT)?;
+    let camera_2_frame_count_diff = (camera_2_created_video_frame_count - 20.0).abs();
+    // ! This is flaky, can fail sometimes
+    assert!(camera_1_frame_count_diff <= 3.0);
+    assert!(camera_2_frame_count_diff <= 3.0);
+
+    let mut camera_1_created_video_frame = Mat::default();
+    if !camera_1_created_video_cap.read(&mut camera_1_created_video_frame)? {
+        return Err("Failed to read frame".into());
+    }
+    let mut camera_2_created_video_frame = Mat::default();
+    if !camera_2_created_video_cap.read(&mut camera_2_created_video_frame)? {
+        return Err("Failed to read frame".into());
+    }
+
+    let camera_1_created_video_frame_data = camera_1_created_video_frame.data_bytes()?;
+    let camera_2_created_video_frame_data = camera_2_created_video_frame.data_bytes()?;
+
+    let camera_1_decoded_test_image = imdecode(utils::REAL_TEST_IMG_1, IMREAD_COLOR)?;
+    let camera_1_decoded_test_image_data = camera_1_decoded_test_image.data_bytes()?;
+    let camera_2_decoded_test_image = imdecode(utils::REAL_TEST_IMG_2, IMREAD_COLOR)?;
+    let camera_2_decoded_test_image_data = camera_2_decoded_test_image.data_bytes()?;
+
+    assert_eq!(
+        camera_1_created_video_frame_data.len(),
+        camera_1_decoded_test_image_data.len()
+    );
+    assert_eq!(
+        camera_2_created_video_frame_data.len(),
+        camera_2_decoded_test_image_data.len()
+    );
 
     Ok(())
 }

@@ -12,7 +12,8 @@ use oko::ws_utils::same_port_connect;
 pub const TEST_IMG_1: [u8; 1] = [1];
 pub const TEST_IMG_2: [u8; 1] = [2];
 
-pub const REAL_TEST_IMG_1: &[u8; 9059] = include_bytes!("../fixtures/real_test_img_1.jpg");
+pub const REAL_TEST_IMG_1: &[u8; 8981] = include_bytes!("../fixtures/real_test_img_1.jpg");
+pub const REAL_TEST_IMG_2: &[u8; 9059] = include_bytes!("../fixtures/real_test_img_2.jpg");
 
 #[allow(dead_code)]
 struct TestCamera {
