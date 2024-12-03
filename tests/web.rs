@@ -407,3 +407,82 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
 
     Ok(())
 }
+
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions")
+))]
+async fn home_feeds(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, context, addr_str, addr, _video_temp_dir) = utils::setup(&pool).await?;
+
+    let page = context.new_page().await?;
+    page.goto_builder(&(addr_str.clone() + "#/login"))
+        .goto()
+        .await?;
+
+    page.click_builder("button#login").click().await?;
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/"));
+
+    page.wait_for_selector_builder("div#logout")
+        .wait_for_selector()
+        .await?;
+
+    let mut camera_1_ws_stream = utils::setup_ws_with_port(addr, 40000).await?;
+
+    camera_1_ws_stream
+        .send(Message::Text("camera".to_string()))
+        .await?;
+
+    camera_1_ws_stream
+        .send(Message::Binary(utils::TEST_IMG_1.into()))
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    let Some(src) = page
+        .get_attribute(
+            "img[alt=\"live camera feed\"][data-camera-id=\"1\"]",
+            "src",
+            None,
+        )
+        .await?
+    else {
+        return Err("No src attribute found".into());
+    };
+
+    assert!(src.contains("blob:"));
+
+    let mut camera_2_ws_stream = utils::setup_ws_with_port(addr, 40001).await?;
+
+    camera_2_ws_stream
+        .send(Message::Text("camera".to_string()))
+        .await?;
+
+    camera_2_ws_stream
+        .send(Message::Binary(utils::TEST_IMG_1.into()))
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    let Some(new_src) = page
+        .get_attribute(
+            "img[alt=\"live camera feed\"][data-camera-id=\"2\"]",
+            "src",
+            None,
+        )
+        .await?
+    else {
+        return Err("No src attribute found".into());
+    };
+
+    assert!(new_src.contains("blob:"));
+    assert_ne!(src, new_src);
+
+    Ok(())
+}

@@ -71,11 +71,10 @@
             <!-- TODO: Add placeholder image/skeleton -->
             <!-- TODO: Maybe use known camera resolution as aspect ratio when camera is offline -->
             <img
-              id="live-feed"
               class="aspect-[4/3]"
               data-camera-id={camera.camera_id}
               src={cameraSources[camera.camera_id] || ""}
-              alt="live feed"
+              alt="live camera feed"
               style={`visibility: ${cameraSources[camera.camera_id] ? "visible" : "hidden"}`}
             />
           </Card.Content>

@@ -1,5 +1,11 @@
-import { fireEvent, render, waitFor } from "@testing-library/svelte";
+import {
+  findAllByAltText,
+  fireEvent,
+  render,
+  waitFor,
+} from "@testing-library/svelte";
 import { describe, test, expect } from "vitest";
+import Home from "../src/routes/Home.svelte";
 import Cameras from "../src/routes/Cameras.svelte";
 import CameraAndVideos from "../src/lib/components/CameraAndVideos.svelte";
 import Login from "../src/routes/Login.svelte";
@@ -106,4 +112,46 @@ describe("Cameras page", () => {
   });
 
   // TODO: Add test for recording list?
+});
+
+describe("Home page", () => {
+  test("images from different cameras are displayed when received", async () => {
+    const liveFeedAltText = "live camera feed";
+
+    user.set(testUserAndCameras);
+    socket.set(new WebSocket("ws://localhost:3000/api/ws"));
+
+    const { getByAltText, queryByAltText, getAllByAltText, findAllByAltText } =
+      render(Home);
+
+    expect(queryByAltText(liveFeedAltText)).not.toBeInTheDocument();
+
+    let liveFeedImgs: HTMLElement[] | null = null;
+
+    await waitFor(() => {
+      liveFeedImgs = getAllByAltText(liveFeedAltText);
+      expect(liveFeedImgs).not.toBe(null);
+      expect(liveFeedImgs.length).toBe(testCameras.length);
+    });
+
+    expect(
+      [...liveFeedImgs!].some(
+        (img) => (img.dataset.cameraId = testCameras[0].camera_id),
+      ),
+    ).toBe(true);
+    expect(
+      [...liveFeedImgs!].some(
+        (img) => (img.dataset.cameraId = testCameras[1].camera_id),
+      ),
+    ).toBe(true);
+
+    await waitFor(() => {
+      expect(liveFeedImgs![0].getAttribute("src")).not.toBe(null);
+      expect(liveFeedImgs![1].getAttribute("src")).not.toBe(null);
+    });
+
+    expect(liveFeedImgs![0].getAttribute("src")).not.toBe(
+      liveFeedImgs![1].getAttribute("src"),
+    );
+  });
 });

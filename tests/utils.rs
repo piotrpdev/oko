@@ -1,6 +1,6 @@
 use std::net::{Ipv4Addr, SocketAddr};
 
-use oko::{App, ImageContainer};
+use oko::App;
 use playwright::{api::BrowserContext, Playwright};
 use sqlx::SqlitePool;
 use tempfile::{tempdir, TempDir};
@@ -38,51 +38,6 @@ const TEST_CAMERA_3: TestCamera = TestCamera {
     name: "Backyard",
 };
 
-#[allow(clippy::must_use_candidate)]
-#[allow(dead_code)]
-pub fn test_img_container_1() -> ImageContainer {
-    ImageContainer {
-        camera_id: 1,
-        timestamp: 1_634_876_400,
-        image_bytes: TEST_IMG_1.to_vec(),
-    }
-}
-
-#[allow(dead_code)]
-pub fn test_img_container_1_json() -> Result<String, serde_json::Error> {
-    serde_json::to_string(&test_img_container_1())
-}
-
-#[allow(clippy::must_use_candidate)]
-#[allow(dead_code)]
-pub fn test_img_container_2() -> ImageContainer {
-    ImageContainer {
-        camera_id: 2,
-        timestamp: 1_634_876_400,
-        image_bytes: TEST_IMG_2.to_vec(),
-    }
-}
-
-#[allow(dead_code)]
-pub fn test_img_container_2_json() -> Result<String, serde_json::Error> {
-    serde_json::to_string(&test_img_container_2())
-}
-
-#[allow(clippy::must_use_candidate)]
-#[allow(dead_code)]
-pub fn real_test_img_container_1() -> ImageContainer {
-    ImageContainer {
-        camera_id: 1,
-        timestamp: 1_634_876_400,
-        image_bytes: REAL_TEST_IMG_1.to_vec(),
-    }
-}
-
-#[allow(dead_code)]
-pub fn real_test_img_container_1_json() -> Result<String, serde_json::Error> {
-    serde_json::to_string(&real_test_img_container_1())
-}
-
 pub async fn setup(
     pool: &SqlitePool,
 ) -> Result<
@@ -116,13 +71,20 @@ pub async fn setup(
     Ok((playwright, context, addr_str, addr, video_path))
 }
 
-pub async fn setup_ws(
+pub async fn setup_ws_with_port(
     addr: SocketAddr,
+    port: u16,
 ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn std::error::Error + Send + Sync>> {
     let url = format!("ws://{addr}/api/ws");
-    let Ok((ws_stream, _)) = same_port_connect(url.into_client_request()?, 40001).await else {
+    let Ok((ws_stream, _)) = same_port_connect(url.into_client_request()?, port).await else {
         return Err("Failed to connect to WebSocket".into());
     };
 
     Ok(ws_stream)
+}
+
+pub async fn setup_ws(
+    addr: SocketAddr,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn std::error::Error + Send + Sync>> {
+    setup_ws_with_port(addr, 40001).await
 }

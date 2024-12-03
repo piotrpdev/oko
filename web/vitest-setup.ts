@@ -127,6 +127,11 @@ export const handlers = [
     // ? There might be a better way that doesn't involve waiting
     await timeoutPromise(100);
     client.send(JSON.stringify(testImgContainer2));
+    await timeoutPromise(100);
+    testImgContainer1.camera_id = 1;
+    await timeoutPromise(100);
+    testImgContainer2.camera_id = 1;
+    client.send(JSON.stringify(testImgContainer2));
   }),
 ];
 
