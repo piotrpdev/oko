@@ -134,7 +134,11 @@
             </Table.Row>
           {/each}
         {:catch error}
-          <p>{error.message}</p>
+          <Table.Row>
+            <Table.Cell class="text-muted-foreground">
+              {error.message}
+            </Table.Cell>
+          </Table.Row>
         {/await}
       </Table.Body>
     </Table.Root>

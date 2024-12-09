@@ -49,7 +49,7 @@ use axum::{
 use crate::{
     users::{AuthSession, Backend},
     web::{auth, protected},
-    Camera, Model, Video,
+    Camera, CameraPermissionView, Model, Video,
 };
 
 const SQLITE_URL: &str = "sqlite://data.db";
@@ -212,7 +212,9 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, state, auth_session))
 }
 
+// TODO: Find out if ECONNRESET after a while of no messages only affects vite dev server or if it is a general issue
 // TODO: Use tracing instead of print in this function
+// ? Using tick await for empty tasks might not be the best idea
 /// Actual websocket statemachine (one will be spawned per connection)
 #[allow(clippy::too_many_lines)]
 async fn handle_socket(
@@ -263,6 +265,8 @@ async fn handle_socket(
         }
     }
 
+    let mut cameras: Vec<CameraPermissionView> = Vec::new();
+
     if is_camera {
         let Ok(db_camera) = Camera::get_using_ip(&auth_session.backend.db, who.to_string()).await
         else {
@@ -272,6 +276,21 @@ async fn handle_socket(
         };
 
         camera_id = db_camera.camera_id;
+    } else {
+        // TODO: Return errors to user
+        let Some(user) = auth_session.user else {
+            println!("User not found in auth session...");
+            return;
+        };
+
+        let Ok(i_cameras) =
+            Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+        else {
+            println!("Error listing cameras for user...");
+            return;
+        };
+
+        cameras = i_cameras;
     }
 
     // ? Maybe use spawn_blocking here, be aware .abort() is not available on blocking tasks
@@ -370,47 +389,69 @@ async fn handle_socket(
 
     tracker.close();
 
-    let mut images_rx = state.images_tx.subscribe();
-
     // By splitting socket we can send and receive at the same time. In this example we will send
     // unsolicited messages to client based on some sort of server's internal event (i.e .timer).
     let (mut sender, mut receiver) = socket.split();
 
     // Spawn a task that will push several messages to the client (does not matter what client does)
-    let mut send_task = tokio::spawn(async move {
-        let mut first_received = false;
-        // TODO: Adding a sleep might be a good idea?
-        loop {
-            // TODO: this might not be the best way of doing this
-            let message = (*images_rx.borrow_and_update()).clone();
+    #[allow(clippy::if_not_else)]
+    let mut send_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
+        if !is_camera {
+            let mut images_rx = state.images_tx.subscribe();
+            // TODO: Proper error handling
+            tokio::spawn(async move {
+                let mut first_received = false;
+                // TODO: Adding a sleep might be a good idea?
+                loop {
+                    // TODO: this might not be the best way of doing this
+                    let message = (*images_rx.borrow_and_update()).clone();
+                    let message_text = message.clone().into_text()?;
 
-            if first_received {
-                println!("Sending message to {who}...");
-                // TODO: Don't send images to cameras. Maybe use a room system?
-                // TODO: Don't send to users without camera permission
-                // TODO: Handle error here
-                let _ = sender.send(message).await;
-            }
+                    if first_received {
+                        println!("Sending message to {who}...");
 
-            if images_rx.changed().await.is_err() {
-                break;
-            }
+                        let message_parsed_json =
+                            serde_json::from_str::<ImageContainer>(&message_text)?;
+                        if !cameras
+                            .iter()
+                            .any(|c| c.camera_id == message_parsed_json.camera_id)
+                        {
+                            continue;
+                        }
 
-            first_received = true;
-        }
+                        // TODO: Handle error here
+                        let _ = sender.send(message).await;
+                    }
 
-        println!("Sending close to {who}...");
+                    if images_rx.changed().await.is_err() {
+                        break;
+                    }
 
-        if let Err(e) = sender
-            .send(Message::Close(Some(CloseFrame {
-                code: axum::extract::ws::close_code::NORMAL,
-                reason: Cow::from("Goodbye"),
-            })))
-            .await
-        {
-            println!("Could not send Close due to {e}, probably it is ok?");
-        }
-    });
+                    first_received = true;
+                }
+
+                println!("Sending close to {who}...");
+
+                if let Err(e) = sender
+                    .send(Message::Close(Some(CloseFrame {
+                        code: axum::extract::ws::close_code::NORMAL,
+                        reason: Cow::from("Goodbye"),
+                    })))
+                    .await
+                {
+                    println!("Could not send Close due to {e}, probably it is ok?");
+                }
+
+                Ok(())
+            })
+        } else {
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+                loop {
+                    interval.tick().await;
+                }
+            })
+        };
 
     // This second task will receive messages from client and print them on server console
     // TODO: Reduce amount of cloning in this function
@@ -446,7 +487,7 @@ async fn handle_socket(
     tokio::select! {
         rv_a = (&mut send_task) => {
             match rv_a {
-                Ok(()) => println!("send_task finished for {who}"),
+                Ok(_) => println!("send_task finished for {who}"),
                 Err(a) => println!("Error sending messages {a:?}")
             }
             recv_task.abort();
