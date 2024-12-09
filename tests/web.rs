@@ -603,3 +603,72 @@ async fn multi_camera_record(
 
     Ok(())
 }
+
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions")
+))]
+async fn camera_user_can_view(
+    pool: SqlitePool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, context, addr_str, _addr, _video_temp_dir) = utils::setup(&pool).await?;
+
+    let page = context.new_page().await?;
+    page.goto_builder(&(addr_str.clone() + "#/login"))
+        .goto()
+        .await?;
+
+    let Some(username_input) = page
+        .wait_for_selector_builder("input#username")
+        .wait_for_selector()
+        .await?
+    else {
+        return Err("Username input not found".into());
+    };
+
+    username_input.fill_builder("joedaly").fill().await?;
+
+    page.click_builder("button#login").click().await?;
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/"));
+
+    page.wait_for_selector_builder("div#logout")
+        .wait_for_selector()
+        .await?;
+
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    if !page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"1\"]",
+            None,
+        )
+        .await?
+    {
+        return Err("Front Door camera not found".into());
+    };
+
+    if page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"2\"]",
+            None,
+        )
+        .await?
+    {
+        return Err("Kitchen camera found when it shouldn't have".into());
+    };
+
+    Ok(())
+}

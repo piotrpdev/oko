@@ -82,8 +82,17 @@ mod get {
         Path(camera_id): Path<i64>,
     ) -> impl IntoResponse {
         match auth_session.user {
-            Some(_user) => {
-                // TODO: Only allow access to user with permissions
+            Some(user) => {
+                let Ok(cameras) =
+                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                if !cameras.iter().any(|c| c.camera_id == camera_id) {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
                 let Ok(videos) = Video::list_for_camera(&auth_session.backend.db, camera_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -98,12 +107,25 @@ mod get {
     // Code copied from: https://github.com/tokio-rs/axum/discussions/608
     pub async fn video(auth_session: AuthSession, Path(video_id): Path<i64>) -> impl IntoResponse {
         match auth_session.user {
-            Some(_user) => {
-                // TODO: Only allow access to user with permissions
+            Some(user) => {
                 let Ok(video) = Video::get_using_id(&auth_session.backend.db, video_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
+
+                let Some(video_camera_id) = video.camera_id else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                let Ok(cameras) =
+                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                if !cameras.iter().any(|c| c.camera_id == video_camera_id) {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
 
                 let Ok(file) = tokio::fs::File::open(video.file_path.clone()).await else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();

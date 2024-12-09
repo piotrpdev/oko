@@ -113,7 +113,7 @@ impl Camera {
             SELECT c.camera_id, c.name as camera_name, cp.can_view, cp.can_control
             FROM cameras c
             JOIN camera_permissions cp ON c.camera_id = cp.camera_id
-            WHERE cp.user_id = ? AND c.is_active = true
+            WHERE cp.user_id = ? AND cp.can_view
             "#,
             user_id
         )
@@ -236,17 +236,12 @@ mod tests {
     async fn list_accessible_to_user(pool: SqlitePool) -> Result<()> {
         let returned_cameras = Camera::list_accessible_to_user(&pool, 3).await?;
 
-        assert_eq!(returned_cameras.len(), 2);
+        assert_eq!(returned_cameras.len(), 1);
 
         assert_eq!(returned_cameras.first().unwrap().camera_id, 1);
         assert_eq!(returned_cameras.first().unwrap().camera_name, "Front Door");
         assert!(returned_cameras.first().unwrap().can_view);
         assert!(!returned_cameras.first().unwrap().can_control);
-
-        assert_eq!(returned_cameras.get(1).unwrap().camera_id, 2);
-        assert_eq!(returned_cameras.get(1).unwrap().camera_name, "Kitchen");
-        assert!(!returned_cameras.get(1).unwrap().can_view);
-        assert!(!returned_cameras.get(1).unwrap().can_control);
 
         Ok(())
     }

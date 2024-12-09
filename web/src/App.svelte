@@ -1,6 +1,6 @@
 <script lang="ts">
   import "./app.css";
-  import Router, { replace } from "svelte-spa-router";
+  import Router, { replace, location } from "svelte-spa-router";
   import PWABadge from "./lib/PWABadge.svelte";
   import Cameras from "./routes/Cameras.svelte";
   import Login from "./routes/Login.svelte";
@@ -43,15 +43,25 @@
     $socket?.send("user");
   }
 
-  onMount(() => {
-    $socket = new WebSocket(`ws://${window.location.host}/api/ws`);
-    $socket?.addEventListener("open", onOpen);
-  });
-
-  onDestroy(() => {
+  function closeSocket() {
     $socket?.removeEventListener("open", onOpen);
     $socket?.close();
-  });
+    $socket = null;
+  }
+
+  $: (() => {
+    if ($location === "/login") {
+      closeSocket();
+      return;
+    }
+
+    if ($socket != null) return;
+
+    $socket = new WebSocket(`ws://${window.location.host}/api/ws`);
+    $socket?.addEventListener("open", onOpen);
+  })();
+
+  onDestroy(() => closeSocket());
 </script>
 
 <Router {routes} on:conditionsFailed={() => replace("/login")} />
