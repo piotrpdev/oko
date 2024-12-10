@@ -3,6 +3,9 @@
 # https://stackoverflow.com/a/821419/19020549
 set -Eeuo pipefail
 
-npm run --prefix web/ build
-npm run --prefix web/ test
+cd ./web
+npm run build
+npm run test
+
+cd ../oko-rs
 cargo test

@@ -33,11 +33,11 @@ repos:
             entry: cargo clippy
             language: system
             types: [rust]
-            args: ["--fix", "--allow-dirty", "--allow-staged", "--all-targets"]
+            args: ["--manifest-path", "./oko-rs/Cargo.toml", "--fix", "--allow-dirty", "--allow-staged", "--all-targets"]
             pass_filenames: false
           - id: fmt
             name: fmt
             entry: cargo fmt
             language: system
             types: [rust]
-            args: ["--"]
+            args: ["--manifest-path", "./oko-rs/Cargo.toml", "--"]

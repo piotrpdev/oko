@@ -19,6 +19,7 @@ You need to install [OpenCV][opencv]'s dependencies, see [this guide][opencv-ins
 ### Setup
 
 ```bash
+cd ./oko-rs
 # Note: This installs support for all SQLx databases
 cargo install sqlx-cli
 sqlx database create
@@ -28,6 +29,7 @@ sqlx migrate run
 ### Run
 
 ```bash
+cd ./oko-rs
 cargo run
 ```
 
@@ -36,6 +38,7 @@ cargo run
 ### Seeding and Camera Testing
 
 ```bash
+cd ./oko-rs
 # Seed with test data
 cat fixtures/* | sqlite3 data.db
 # Send image frames
@@ -54,6 +57,7 @@ chmod +x test.sh
 #### Check Test Coverage
 
 ```bash
+cd ./oko-rs
 cargo install cargo-tarpaulin
 # Create report in Html format (omit --out flag for report in console)
 cargo tarpaulin --out Html
