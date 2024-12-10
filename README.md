@@ -33,22 +33,6 @@ cargo run
 
 ## Development
 
-### Compiler and Linker
-
-<!--
-hyperfine --warmup 3 --min-runs 5 \
-'sed -i -e "s|\"random\"|\"$(date +%Y%m%d%H%M%S)\"|g" \ src/web/app.rs && \
-cargo build'
--->
-
-I recommend using [`cranelift`][cranelift] and [`mold`][mold] for dev builds.
-
-```bash
-rustup toolchain install nightly
-rustup component add rustc-codegen-cranelift-preview --toolchain nightly
-sudo apt install mold
-```
-
 ### Seeding and Camera Testing
 
 ```bash
@@ -116,8 +100,6 @@ video-to-image conversion needs."*][video2image-medium]
 
 [opencv]: https://opencv.org/
 [opencv-install]: https://github.com/twistedfall/opencv-rust/blob/6784a7e74c5cd3e1edced9484d6839d67ee70a12/INSTALL.md
-[cranelift]: https://github.com/bjorn3/rustc_codegen_cranelift
-[mold]: https://github.com/rui314/mold
 [pre-commit]: https://github.com/pre-commit/pre-commit
 [license]: ./LICENSE
 [axum-sqlite]: https://github.com/maxcountryman/axum-login/tree/9c26b37cd03be8d803ae261b7bc556229c2043da/examples/sqlite
