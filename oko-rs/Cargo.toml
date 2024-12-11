@@ -27,9 +27,6 @@ sqlx = { version = "0.8.1", features = ["sqlite", "time", "runtime-tokio"] }
 time = "0.3.30"
 tokio = { workspace = true }
 futures = { workspace = true }
-futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
-headers = "0.4"
-tower = "0.4.13"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tower-sessions = { version = "0.13.0", default-features = false, features = [
     "signed",
