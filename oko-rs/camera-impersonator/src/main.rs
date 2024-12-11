@@ -3,7 +3,7 @@
 use std::env;
 use std::process::ExitCode;
 
-use futures::SinkExt;
+use futures_util::SinkExt;
 use opencv::core::{Mat, Vector};
 use opencv::imgcodecs::imencode_def;
 use opencv::prelude::*;

@@ -12,7 +12,7 @@ use axum_login::{
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use opencv::{
     core::Size,
     imgcodecs::{imdecode, IMREAD_COLOR},

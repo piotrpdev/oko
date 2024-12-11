@@ -12,35 +12,33 @@ default-run = "oko-rs"
 name = "oko"
 
 [workspace.dependencies]
-futures = "0.3.0"
-tokio = { version = "1.34.0", features = ["full"] }
-opencv = "0.93.3"
+futures-util = { version = "0.3.31", default-features = false }
+tokio = { version = "1.34.0", features = ["fs", "signal", "rt-multi-thread", "net", "time", "macros"] }
+opencv = { version = "0.93.3", default-features = false, features = ["imgcodecs", "videoio"] }
 
 [dependencies]
 async-trait = "0.1.74"
-axum = { version = "0.7.5", features = ["ws"] }
+axum = { version = "0.7.5", default-features = false, features = ["form", "http1", "json", "ws"] }
 axum-login = "0.16.0"
 http = "1.0.0"
-password-auth = "1.0.0"
+password-auth = { version = "1.0.0", default-features = false, features = ["argon2"] }
 serde = "1.0.0"
-sqlx = { version = "0.8.1", features = ["sqlite", "time", "runtime-tokio"] }
-time = "0.3.30"
+sqlx = { version = "0.8.1", default-features = false, features = ["json"] }
+time = { version = "0.3.30", default-features = false }
 tokio = { workspace = true }
-futures = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tower-sessions = { version = "0.13.0", default-features = false, features = [
-    "signed",
-] }
+futures-util = { workspace = true }
+tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter", "fmt"] }
+tower-sessions = { version = "0.13.0", default-features = false, features = ["signed"] }
 tower-sessions-sqlx-store = { version = "0.14.0", features = ["sqlite"] }
-thiserror = "2.0.6"
+thiserror = { version = "2.0.6", default-features = false }
 serde_json = "1.0.132"
-tracing = "0.1.40"
+tracing = { version = "0.1.40", default-features = false }
 tower-http = { version = "0.6.1", features = ["fs"] }
 opencv = { workspace = true }
 tokio-util = { version = "0.7.12", features = ["rt"] }
 
 [dev-dependencies]
-playwright = "0.0.20"
+playwright = { version = "0.0.20", default-features = false, features = ["rt-tokio"] }
 tempfile = "3.14.0"
 ws-utils = { path = "./ws-utils" }
 
