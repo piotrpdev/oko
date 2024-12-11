@@ -127,7 +127,7 @@ impl App {
         let backend = Backend::new(self.db);
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
-        let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web/dist/");
+        let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../web/dist/");
 
         // TODO: Use better default message
         let tx = watch::Sender::new(Message::Text("Hello, world!".to_string()));
