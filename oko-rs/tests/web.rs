@@ -15,7 +15,7 @@ use playwright::api::{
 };
 use sqlx::SqlitePool;
 use tokio::time::{sleep, Duration};
-use tokio_tungstenite::tungstenite::Message;
+use ws_utils::Message;
 
 #[path = "./utils.rs"]
 mod utils;

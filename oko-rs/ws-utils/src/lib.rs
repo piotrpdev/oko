@@ -1,9 +1,14 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::net::{TcpSocket, TcpStream};
+use tokio_tungstenite::client_async_tls_with_config;
 use tokio_tungstenite::tungstenite::error::{Error, UrlError};
 use tokio_tungstenite::tungstenite::handshake::client::{Request, Response};
 use tokio_tungstenite::tungstenite::Error as WsError;
-use tokio_tungstenite::{client_async_tls_with_config, MaybeTlsStream, WebSocketStream};
+
+pub use tokio_tungstenite::{
+    tungstenite::{client::IntoClientRequest, Message},
+    MaybeTlsStream, WebSocketStream,
+};
 
 // taken from tokio-tungstenite source code
 #[allow(dead_code)]

@@ -5,9 +5,7 @@ use playwright::{api::BrowserContext, Playwright};
 use sqlx::SqlitePool;
 use tempfile::{tempdir, TempDir};
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{tungstenite::client::IntoClientRequest, MaybeTlsStream, WebSocketStream};
-
-use oko::ws_utils::same_port_connect;
+use ws_utils::{same_port_connect, IntoClientRequest, MaybeTlsStream, WebSocketStream};
 
 pub const TEST_IMG_1: [u8; 1] = [1];
 pub const TEST_IMG_2: [u8; 1] = [2];

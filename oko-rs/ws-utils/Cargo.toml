@@ -1,0 +1,8 @@
+[package]
+name = "ws-utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }

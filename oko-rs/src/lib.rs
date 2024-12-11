@@ -6,8 +6,6 @@ mod db;
 mod users;
 mod web;
 
-pub mod ws_utils;
-
 pub use {
     db::Camera, db::CameraPermission, db::CameraPermissionView, db::CameraSetting, db::Model,
     db::User, db::Video, db::VideoCameraView,

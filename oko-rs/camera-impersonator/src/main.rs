@@ -9,10 +9,7 @@ use opencv::imgcodecs::imencode_def;
 use opencv::prelude::*;
 use opencv::videoio::{VideoCapture, VideoCaptureTraitConst, CAP_ANY};
 use tokio::time::{sleep, Duration};
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::Message;
-
-use oko::ws_utils::same_port_connect;
+use ws_utils::{IntoClientRequest, Message};
 
 const USAGE_MESSAGE: &str =
     "Usage: camera-impersonator <send_interval_ms> <client_port> <path_to_video_file>";
@@ -55,9 +52,10 @@ async fn main() -> ExitCode {
     let mut frame = Mat::default();
 
     let url = "ws://127.0.0.1:3000/api/ws".to_string();
-    let (mut ws_stream, _) = same_port_connect(url.into_client_request().unwrap(), client_port)
-        .await
-        .unwrap();
+    let (mut ws_stream, _) =
+        ws_utils::same_port_connect(url.into_client_request().unwrap(), client_port)
+            .await
+            .unwrap();
 
     ws_stream
         .send(Message::Text("camera".to_string()))
