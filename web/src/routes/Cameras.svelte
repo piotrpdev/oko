@@ -111,7 +111,7 @@
               size="icon"
               aria-label="Remove Camera"
               data-camera-id={camera.camera_id}
-              class="ml-auto flex h-4 w-4 shrink-0 items-center justify-center opacity-0 transition-all group-hover:opacity-100"
+              class="ml-auto flex h-4 w-4 shrink-0 items-center justify-center transition-all group-hover:opacity-100 md:opacity-0"
             >
               <Trash class="h-4 w-4" />
             </Button>
