@@ -3,7 +3,13 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse, ws } from "msw";
 import { WebSocket } from "undici";
-import { Camera, ImageContainer, User, VideoCameraView } from "./src/types.ts";
+import {
+  Camera,
+  CameraPermission,
+  ImageContainer,
+  User,
+  VideoCameraView,
+} from "./src/types.ts";
 
 Reflect.set(globalThis, "WebSocket", WebSocket);
 
@@ -54,7 +60,26 @@ export const testVideos: VideoCameraView[] = [
   },
 ];
 
-function timeoutPromise(ms: number) {
+export const testPermissions: CameraPermission[] = [
+  {
+    permission_id: 3,
+    camera_id: 1,
+    user_id: 2,
+    username: "piotrpdev",
+    can_view: true,
+    can_control: true,
+  },
+  {
+    permission_id: 5,
+    camera_id: 1,
+    user_id: 3,
+    username: "joedaly",
+    can_view: true,
+    can_control: false,
+  },
+];
+
+export function timeoutPromise(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
 
@@ -94,6 +119,15 @@ export const handlers = [
 
     return HttpResponse.json(videos);
   }),
+  http.get("/api/cameras/:cameraId/permissions", ({ params: { cameraId } }) => {
+    const parsedCameraId = Number(cameraId);
+
+    const permissions = testPermissions.filter(
+      (permission) => permission.camera_id == parsedCameraId,
+    );
+
+    return HttpResponse.json(permissions);
+  }),
   http.post("/api/cameras", async ({ request }) => {
     const requestBody = await request.formData();
 
@@ -110,6 +144,28 @@ export const handlers = [
 
     return HttpResponse.json(newCamera.camera_id);
   }),
+  // request body: { can_view: string; can_control: string; }
+  http.patch(
+    "/api/permissions/:permissionId",
+    async ({ request, params: { permissionId } }) => {
+      const requestBody = await request.formData();
+
+      if (!requestBody) return HttpResponse.error();
+
+      const parsedPermissionId = Number(permissionId);
+
+      const permission = testPermissions.find(
+        (permission) => permission.permission_id === parsedPermissionId,
+      );
+
+      if (!permission) return HttpResponse.error();
+
+      permission.can_view = requestBody.get("can_view") === "true";
+      permission.can_control = requestBody.get("can_control") === "true";
+
+      return HttpResponse.json(permission);
+    },
+  ),
   http.delete("/api/cameras/:cameraId", ({ params: { cameraId } }) => {
     const parsedCameraId = Number(cameraId);
 

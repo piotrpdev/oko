@@ -12,7 +12,13 @@ import Login from "../src/routes/Login.svelte";
 import { get, Writable } from "svelte/store";
 import { socket } from "../src/lib/stores/socketStore";
 import { user } from "../src/lib/stores/userStore";
-import { testCamera1, testCameras, testUserAndCameras } from "../vitest-setup";
+import {
+  testCamera1,
+  testCameras,
+  testPermissions,
+  testUserAndCameras,
+  timeoutPromise,
+} from "../vitest-setup";
 
 // https://testing-library.com/docs/queries/about/
 
@@ -108,6 +114,102 @@ describe("Cameras page", () => {
 
     await waitFor(() => {
       expect(queryByText(testCamera1.camera_name)).not.toBeInTheDocument();
+    });
+  });
+
+  test("user permissions for camera update after change", async () => {
+    user.set(testUserAndCameras);
+
+    const {
+      getByText,
+      queryByText,
+      getAllByLabelText,
+      getByRole,
+      getAllByRole,
+    } = render(Cameras);
+
+    expect(queryByText(testCameras[0].camera_name)).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getByText(testCameras[0].camera_name)).toBeInTheDocument();
+    });
+
+    const editCameraButtons = getAllByLabelText("Edit Camera");
+    const editBackyardButton = editCameraButtons.find(
+      (button) =>
+        button.dataset.cameraId === testCameras[0].camera_id.toString(),
+    );
+
+    expect(editBackyardButton).not.toBe(undefined);
+    expect(editBackyardButton?.tagName).toBe("BUTTON");
+
+    await fireEvent.click(editBackyardButton as HTMLButtonElement);
+
+    await waitFor(() => {
+      testPermissions.forEach((permission) => {
+        expect(queryByText(permission.username)).toBeInTheDocument();
+      });
+    });
+
+    const currentPermissionSpans = getAllByLabelText(
+      "Current User Camera Permission",
+    );
+    const currentPermissionSpan = currentPermissionSpans.find(
+      (span) =>
+        span.dataset.permissionId ===
+        testPermissions[1].permission_id.toString(),
+    );
+
+    expect(currentPermissionSpan).not.toBe(undefined);
+    expect(currentPermissionSpan?.tagName).toBe("SPAN");
+    expect(currentPermissionSpan?.textContent).toBe("Viewer");
+
+    const editPermissionButtons = getAllByLabelText(
+      "Edit User Camera Permission",
+    );
+    const editUserPermissionButton = editPermissionButtons.find(
+      (button) =>
+        button.dataset.permissionId ===
+        testPermissions[1].permission_id.toString(),
+    );
+
+    expect(editUserPermissionButton).not.toBe(undefined);
+    expect(editUserPermissionButton?.tagName).toBe("BUTTON");
+
+    await fireEvent.click(editUserPermissionButton as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(() =>
+        getAllByRole("option", { selected: false }),
+      ).not.toThrowError();
+    });
+
+    const options = getAllByRole("option", { selected: false });
+    const option = options.find(
+      (option) =>
+        option.tagName === "DIV" && option.dataset.value === '"controller"',
+    );
+
+    expect(option).not.toBe(undefined);
+
+    await fireEvent.click(option as HTMLOptionElement);
+
+    // Select element changes value immediately and *then* refreshes, so we can't just use waitFor since the value will already be updated
+    await timeoutPromise(200);
+
+    await waitFor(() => {
+      const updatedCurrentPermissionSpans = getAllByLabelText(
+        "Current User Camera Permission",
+      );
+      const updatedCurrentPermissionSpan = updatedCurrentPermissionSpans.find(
+        (span) =>
+          span.dataset.permissionId ===
+          testPermissions[1].permission_id.toString(),
+      );
+
+      expect(updatedCurrentPermissionSpan).not.toBe(undefined);
+      expect(updatedCurrentPermissionSpan?.tagName).toBe("SPAN");
+      expect(updatedCurrentPermissionSpan?.textContent).toBe("Controller");
     });
   });
 

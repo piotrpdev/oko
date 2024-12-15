@@ -259,8 +259,16 @@
                                 onSelectedChange={(selected) =>
                                   onPermissionChange(permission, selected)}
                               >
-                                <Select.Trigger class="w-[120px]">
-                                  <Select.Value placeholder="Role" />
+                                <Select.Trigger
+                                  aria-label="Edit User Camera Permission"
+                                  data-permission-id={permission.permission_id}
+                                  class="w-[120px]"
+                                >
+                                  <Select.Value
+                                    aria-label="Current User Camera Permission"
+                                    data-permission-id={permission.permission_id}
+                                    placeholder="Role"
+                                  />
                                 </Select.Trigger>
                                 <Select.Content>
                                   <Select.Group>
