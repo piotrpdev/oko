@@ -4,6 +4,7 @@
   import CircleUser from "lucide-svelte/icons/circle-user";
   import Menu from "lucide-svelte/icons/menu";
   import Package2 from "lucide-svelte/icons/package-2";
+  import Eye from "lucide-svelte/icons/eye";
 
   import { Button } from "$lib/components/ui/button/index.js";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
@@ -15,7 +16,6 @@
   let tabs = [
     { name: "Home", href: "/" },
     { name: "Cameras", href: "/cameras" },
-    { name: "Settings", href: "/settings" },
   ];
 
   async function logout() {
@@ -38,7 +38,8 @@
       class="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6"
     >
       <span class="flex items-center gap-2 text-lg font-semibold md:text-base">
-        <Package2 class="h-6 w-6" />
+        <!-- TODO: Replace with logo -->
+        <Eye class="h-6 w-6" />
         <span class="sr-only">Oko</span>
       </span>
       {#each tabs as { name, href }}

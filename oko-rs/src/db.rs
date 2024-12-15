@@ -2,6 +2,7 @@ use sqlx::{Result, SqlitePool};
 
 pub use camera::Camera;
 pub use camera_permission::CameraPermission;
+pub use camera_permission_user_view::CameraPermissionUserView;
 pub use camera_permission_view::CameraPermissionView;
 pub use camera_setting::CameraSetting;
 pub use user::User;
@@ -10,6 +11,7 @@ pub use video_camera_view::VideoCameraView;
 
 mod camera;
 mod camera_permission;
+mod camera_permission_user_view;
 mod camera_permission_view;
 mod camera_setting;
 mod user;

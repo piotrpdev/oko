@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Result, SqlitePool};
 
-use super::Model;
+use super::{CameraPermissionUserView, Model};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraPermission {
@@ -92,6 +92,40 @@ impl Model for CameraPermission {
         .await?;
 
         Ok(())
+    }
+}
+
+impl CameraPermission {
+    pub async fn list_for_camera(pool: &SqlitePool, camera_id: i64) -> Result<Vec<Self>> {
+        sqlx::query_as!(
+            CameraPermission,
+            r#"
+            SELECT *
+            FROM camera_permissions
+            WHERE camera_id = ?
+            "#,
+            camera_id
+        )
+        .fetch_all(pool)
+        .await
+    }
+
+    pub async fn list_for_camera_with_username(
+        pool: &SqlitePool,
+        camera_id: i64,
+    ) -> Result<Vec<CameraPermissionUserView>> {
+        sqlx::query_as!(
+            CameraPermissionUserView,
+            r#"
+            SELECT cp.permission_id, cp.camera_id, cp.user_id, u.username, cp.can_view, cp.can_control
+            FROM camera_permissions cp
+            JOIN users u ON cp.user_id = u.user_id
+            WHERE cp.camera_id = ?
+            "#,
+            camera_id
+        )
+        .fetch_all(pool)
+        .await
     }
 }
 
@@ -202,6 +236,60 @@ mod tests {
         let impossible_deleted = CameraPermission::delete_using_id(&pool, permission_id).await;
 
         assert!(impossible_deleted.is_err());
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_permissions")
+    ))]
+    async fn list_for_camera(pool: SqlitePool) -> Result<()> {
+        let camera_id = 1;
+
+        let returned_permissions = CameraPermission::list_for_camera(&pool, camera_id).await?;
+        assert_eq!(returned_permissions.len(), 3);
+
+        let permission_ids: Vec<i64> = returned_permissions
+            .iter()
+            .map(|permission| permission.permission_id)
+            .collect();
+
+        assert!(permission_ids.contains(&1));
+        assert!(permission_ids.contains(&3));
+        assert!(permission_ids.contains(&5));
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_permissions")
+    ))]
+    async fn list_for_camera_with_username(pool: SqlitePool) -> Result<()> {
+        let camera_id = 1;
+
+        let returned_permissions =
+            CameraPermission::list_for_camera_with_username(&pool, camera_id).await?;
+        assert_eq!(returned_permissions.len(), 3);
+
+        let permission_ids: Vec<i64> = returned_permissions
+            .iter()
+            .map(|permission| permission.permission_id)
+            .collect();
+
+        assert!(permission_ids.contains(&1));
+        assert!(permission_ids.contains(&3));
+        assert!(permission_ids.contains(&5));
+
+        let usernames: Vec<&str> = returned_permissions
+            .iter()
+            .map(|permission| permission.username.as_str())
+            .collect();
+
+        assert!(usernames.contains(&"piotrpdev"));
+        assert!(usernames.contains(&"joedaly"));
+        assert!(usernames.contains(&"admin"));
 
         Ok(())
     }

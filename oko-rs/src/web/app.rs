@@ -127,6 +127,7 @@ impl App {
         let backend = Backend::new(self.db);
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
+        // TODO: Embed the frontend in the binary
         let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../web/dist/");
 
         // TODO: Use better default message

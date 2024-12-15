@@ -7,8 +7,8 @@ mod users;
 mod web;
 
 pub use {
-    db::Camera, db::CameraPermission, db::CameraPermissionView, db::CameraSetting, db::Model,
-    db::User, db::Video, db::VideoCameraView,
+    db::Camera, db::CameraPermission, db::CameraPermissionUserView, db::CameraPermissionView,
+    db::CameraSetting, db::Model, db::User, db::Video, db::VideoCameraView,
 };
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

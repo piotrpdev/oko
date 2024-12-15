@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use futures_util::SinkExt;
-use oko::Video;
+use oko::{CameraPermission, Model, Video};
 use opencv::{
     core::{Mat, MatTraitConstManual},
     imgcodecs::{imdecode, IMREAD_COLOR},
@@ -23,6 +23,7 @@ mod utils;
 // TODO: Add tests for the WebSocket routes
 // ? Should these tests be run sequentially? Too many simultaneous instances of Chromium might be an issue.
 // TODO: Add wait for every page navigation
+// TODO: Try `waitForResponse` or `waitForLoadState` instead of `sleep` https://stackoverflow.com/questions/74586859/wait-for-network-idle-after-click
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
@@ -669,6 +670,120 @@ async fn camera_user_can_view(
     {
         return Err("Kitchen camera found when it shouldn't have".into());
     };
+
+    Ok(())
+}
+
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions")
+))]
+async fn camera_user_permission_updates(
+    pool: SqlitePool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, context, addr_str, _addr, _video_temp_dir) = utils::setup(&pool).await?;
+
+    let page = context.new_page().await?;
+    page.goto_builder(&(addr_str.clone() + "#/login"))
+        .goto()
+        .await?;
+
+    page.click_builder("button#login").click().await?;
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/"));
+
+    page.wait_for_selector_builder("div#logout")
+        .wait_for_selector()
+        .await?;
+
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    if !page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"1\"]",
+            None,
+        )
+        .await?
+    {
+        return Err("Front Door camera not found".into());
+    };
+
+    page.click_builder("button[aria-label=\"Edit Camera\"][data-camera-id=\"1\"]")
+        .click()
+        .await?;
+
+    let camera_permissions = CameraPermission::list_for_camera_with_username(&pool, 1).await?;
+    let Some(joe_camera_permission) = camera_permissions
+        .iter()
+        .find(|cp| cp.username == "joedaly")
+    else {
+        return Err("Joe's camera permission not found".into());
+    };
+
+    assert_eq!(joe_camera_permission.permission_id, 5);
+    assert!(joe_camera_permission.can_view);
+    assert!(!joe_camera_permission.can_control);
+
+    let Some(current_permission) = page
+        .wait_for_selector_builder(
+            "span[aria-label=\"Current User Camera Permission\"][data-permission-id=\"5\"]",
+        )
+        .wait_for_selector()
+        .await?
+    else {
+        return Err("Current user camera permission not found".into());
+    };
+
+    let Some(current_permission_text) = current_permission.text_content().await? else {
+        return Err("Current user camera permission text not found".into());
+    };
+
+    assert_eq!(current_permission_text, "Viewer");
+
+    page.click_builder(
+        "button[aria-label=\"Edit User Camera Permission\"][data-permission-id=\"5\"]",
+    )
+    .click()
+    .await?;
+
+    page.click_builder("div[data-value='\"controller\"']")
+        .click()
+        .await?;
+
+    sleep(Duration::from_millis(200)).await;
+
+    let updated_joe_camera_permission = CameraPermission::get_using_id(&pool, 5).await?;
+
+    assert!(updated_joe_camera_permission.can_view);
+    assert!(updated_joe_camera_permission.can_control);
+
+    let Some(new_permission) = page
+        .wait_for_selector_builder(
+            "span[aria-label=\"Current User Camera Permission\"][data-permission-id=\"5\"]",
+        )
+        .wait_for_selector()
+        .await?
+    else {
+        return Err("New user camera permission not found".into());
+    };
+
+    let Some(new_permission_text) = new_permission.text_content().await? else {
+        return Err("New user camera permission text not found".into());
+    };
+
+    assert_eq!(new_permission_text, "Controller");
 
     Ok(())
 }
