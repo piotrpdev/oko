@@ -1,7 +1,7 @@
 use axum::{
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 
@@ -17,7 +17,15 @@ pub fn router() -> Router<()> {
             "/api/cameras/:camera_id/videos",
             get(self::get::videos_for_camera),
         )
+        .route(
+            "/api/cameras/:camera_id/permissions",
+            get(self::get::camera_permissions),
+        )
         .route("/api/videos/:video_id", get(self::get::video))
+        .route(
+            "/api/permissions/:permission_id",
+            patch(self::patch::permissions),
+        )
 }
 
 mod get {
@@ -26,7 +34,7 @@ mod get {
     use serde::Serialize;
     use tokio_util::io::ReaderStream;
 
-    use crate::{db::Camera, CameraPermissionView, Model, User, Video};
+    use crate::{db::Camera, CameraPermission, CameraPermissionView, Model, User, Video};
 
     use super::{AuthSession, IntoResponse, StatusCode};
 
@@ -154,6 +162,31 @@ mod get {
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
+
+    pub async fn camera_permissions(
+        auth_session: AuthSession,
+        Path(camera_id): Path<i64>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                let Ok(permissions) = CameraPermission::list_for_camera_with_username(
+                    &auth_session.backend.db,
+                    camera_id,
+                )
+                .await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                Json(permissions).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
 }
 
 // TODO: Don't always return the same error
@@ -235,6 +268,49 @@ mod post {
 }
 
 // TODO: Don't always return the same error
+
+mod patch {
+    use super::{AuthSession, IntoResponse, StatusCode};
+    use crate::{CameraPermission, Model};
+    use axum::{extract::Path, Form, Json};
+    use serde::Deserialize;
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct UpdatePermissionForm {
+        pub can_view: bool,
+        pub can_control: bool,
+    }
+
+    pub async fn permissions(
+        auth_session: AuthSession,
+        Path(permission_id): Path<i64>,
+        Form(permission_form): Form<UpdatePermissionForm>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                let Ok(mut permission) =
+                    CameraPermission::get_using_id(&auth_session.backend.db, permission_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                permission.can_view = permission_form.can_view;
+                permission.can_control = permission_form.can_control;
+
+                if (permission.update_using_self(&auth_session.backend.db).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                Json(permission).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+}
 
 mod delete {
     use super::{AuthSession, IntoResponse, StatusCode};

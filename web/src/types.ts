@@ -25,6 +25,15 @@ export type VideoCameraView = {
   file_size: number;
 };
 
+export type CameraPermission = {
+  permission_id: number;
+  camera_id: number;
+  user_id: number;
+  username: string;
+  can_view: boolean;
+  can_control: boolean;
+};
+
 export type ImageContainer = {
   camera_id: number;
   timestamp: number;
