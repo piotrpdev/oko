@@ -55,7 +55,7 @@ sudo apt install mold
 ```bash
 cd ./oko-rs
 # Seed with test data
-cat fixtures/* | sqlite3 data.db
+cat fixtures/*.sql | sqlite3 data.db
 # Send image frames
 cargo run -p camera-impersonator 80 40001 ./videos/2.mp4
 ```
