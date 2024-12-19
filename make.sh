@@ -20,6 +20,8 @@ case "$1" in
         npm run build
 
         cd ../$BACKEND_DIR
+        mkdir -p static
+        cp -r ../$FRONTEND_DIR/dist/* ./static
         cargo run
         ;;
     "test")
@@ -28,6 +30,8 @@ case "$1" in
         npm run test
 
         cd ../$BACKEND_DIR
+        mkdir -p static
+        cp -r ../$FRONTEND_DIR/dist/* ./static
         cargo test
         ;;
     "coverage")

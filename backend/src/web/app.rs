@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use axum_embed::ServeEmbed;
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
@@ -18,6 +19,7 @@ use opencv::{
     imgcodecs::{imdecode, IMREAD_COLOR},
     videoio::{VideoWriter, VideoWriterTrait},
 };
+use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::{Duration, OffsetDateTime};
@@ -28,7 +30,6 @@ use tokio::{
     task::{AbortHandle, JoinHandle},
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-use tower_http::services::ServeDir;
 use tower_sessions::cookie::Key;
 use tower_sessions_sqlx_store::SqliteStore;
 
@@ -60,10 +61,13 @@ const DEFAULT_ADMIN_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7Dal
 const EXPIRED_SESSION_DELETION_INTERVAL: tokio::time::Duration =
     tokio::time::Duration::from_secs(60);
 const SESSION_DURATION: Duration = Duration::days(1);
-const RELATIVE_FRONTEND_PATH: &str = "../frontend/dist/";
 const DEFAULT_IMG_WATCH_MESSAGE: &str = "Hello, world!"; // TODO: Use better default message
 const CAMERA_INDICATOR_TEXT: &str = "camera";
 const EMPTY_TASK_SLEEP_DURATION: tokio::time::Duration = tokio::time::Duration::from_millis(100);
+
+#[derive(RustEmbed, Clone)]
+#[folder = "static/"]
+struct EmbeddedAssets;
 
 // ? Maybe move this somewhere better
 // TODO: Probably change to Protobuf or bincode instead of JSON
@@ -152,8 +156,7 @@ impl App {
         let backend = Backend::new(self.db);
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
-        // TODO: Embed the frontend in the binary
-        let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(RELATIVE_FRONTEND_PATH);
+        let embedded_assets_service = ServeEmbed::<EmbeddedAssets>::new();
 
         let tx = watch::Sender::new(Message::Text(DEFAULT_IMG_WATCH_MESSAGE.to_string()));
 
@@ -168,7 +171,7 @@ impl App {
 
         // TODO: Order of merge matters here, make sure the correct routes are protected and that fallback works as intended.
         let app = protected::router()
-            .fallback_service(ServeDir::new(vite_build_dir).append_index_html_on_directories(true))
+            .fallback_service(embedded_assets_service)
             .route_layer(login_required!(Backend, login_url = "/api/login"))
             .merge(main_router)
             .merge(auth::router())
