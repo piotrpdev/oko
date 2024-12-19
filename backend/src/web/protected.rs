@@ -77,8 +77,6 @@ mod get {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
 
-                println!("{cameras:?}");
-
                 Json(cameras).into_response()
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
@@ -154,8 +152,6 @@ mod get {
                         &format!("attachment; filename={filename:?}"),
                     ),
                 ];
-
-                println!("{headers:?}");
 
                 (headers, body).into_response()
             }

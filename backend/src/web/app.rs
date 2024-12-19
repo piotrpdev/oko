@@ -45,6 +45,7 @@ use axum::{
     extract::{ws::CloseFrame, State},
     Router,
 };
+use tracing::{debug, error, info, warn};
 
 use crate::{
     users::{AuthSession, Backend},
@@ -65,7 +66,7 @@ const CAMERA_INDICATOR_TEXT: &str = "camera";
 const EMPTY_TASK_SLEEP_DURATION: tokio::time::Duration = tokio::time::Duration::from_millis(100);
 
 // ? Maybe move this somewhere better
-// TODO: Probably change to Protobuf instead of JSON
+// TODO: Probably change to Protobuf or bincode instead of JSON
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ImageContainer {
     pub camera_id: i64,
@@ -230,14 +231,13 @@ async fn ws_handler(
     state: State<Arc<AppState>>,
     auth_session: AuthSession,
 ) -> impl IntoResponse {
-    println!("{addr} connected to ws_handler.");
+    info!("{addr} connected to ws_handler.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
     ws.on_upgrade(move |socket| handle_socket(socket, addr, state, auth_session))
 }
 
 // TODO: Find out if ECONNRESET after a while of no messages only affects vite dev server or if it is a general issue
-// TODO: Use tracing instead of print in this function
 // ? Using tick await for empty tasks might not be the best idea
 /// Actual websocket statemachine (one will be spawned per connection)
 #[allow(clippy::too_many_lines)]
@@ -247,7 +247,7 @@ async fn handle_socket(
     state: State<Arc<AppState>>,
     auth_session: AuthSession,
 ) {
-    println!("{who} connected to handle_socket.");
+    info!("{who} connected to handle_socket.");
 
     // TODO: Update camera in DB to be online
 
@@ -273,18 +273,18 @@ async fn handle_socket(
             match msg {
                 Message::Text(msg_txt) => {
                     if msg_txt == CAMERA_INDICATOR_TEXT {
-                        println!("{who} is a camera...");
+                        info!("{who} is a camera...");
                         is_camera = true;
                     } else {
-                        println!("{who} is not camera...");
+                        info!("{who} is not camera...");
                     }
                 }
                 _ => {
-                    println!("Ignoring first message from {who}...");
+                    debug!("Ignoring first message from {who}...");
                 }
             }
         } else {
-            println!("client {who} abruptly disconnected");
+            warn!("client {who} abruptly disconnected");
             return;
         }
     }
@@ -295,7 +295,7 @@ async fn handle_socket(
         let Ok(db_camera) = Camera::get_using_ip(&auth_session.backend.db, who.to_string()).await
         else {
             // TODO: Inform client/db if camera not found (both web user and ws connection), also find better way to exit here?
-            println!("Camera not found in DB, aborting...");
+            error!("Camera not found in DB, aborting...");
             return;
         };
 
@@ -303,14 +303,14 @@ async fn handle_socket(
     } else {
         // TODO: Return errors to user
         let Some(user) = auth_session.user else {
-            println!("User not found in auth session...");
+            error!("User not found in auth session...");
             return;
         };
 
         let Ok(i_cameras) =
             Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
         else {
-            println!("Error listing cameras for user...");
+            error!("Error listing cameras for user...");
             return;
         };
 
@@ -359,7 +359,7 @@ async fn handle_socket(
                     let message_text = message.into_text()?;
 
                     if first_received {
-                        println!("Recording image from {who}...");
+                        debug!("Recording image from {who}...");
                         let message_parsed_json =
                             serde_json::from_str::<ImageContainer>(&message_text)?;
                         let message_data_vec = message_parsed_json.image_bytes;
@@ -391,7 +391,7 @@ async fn handle_socket(
                 video.file_size = Some(total_bytes.try_into()?);
 
                 video.update_using_self(&auth_session.backend.db).await?;
-                println!("Recording finished for {who}...");
+                info!("Recording finished for {who}...");
 
                 Ok(())
             })
@@ -432,7 +432,7 @@ async fn handle_socket(
                     let message_text = message.clone().into_text()?;
 
                     if first_received {
-                        println!("Sending message to {who}...");
+                        debug!("Sending message to {who}...");
 
                         let message_parsed_json =
                             serde_json::from_str::<ImageContainer>(&message_text)?;
@@ -454,7 +454,7 @@ async fn handle_socket(
                     first_received = true;
                 }
 
-                println!("Sending close to {who}...");
+                info!("Sending close to {who}...");
 
                 if let Err(e) = sender
                     .send(Message::Close(Some(CloseFrame {
@@ -463,7 +463,7 @@ async fn handle_socket(
                     })))
                     .await
                 {
-                    println!("Could not send Close due to {e}, probably it is ok?");
+                    warn!("Could not send Close due to {e}, probably it is ok?");
                 }
 
                 Ok(())
@@ -497,7 +497,7 @@ async fn handle_socket(
                 };
                 // ? Storing as string here might not be the best idea
                 let Ok(img_container_json) = serde_json::to_string(&img_container) else {
-                    println!("Error serializing image container to JSON");
+                    error!("Error serializing image container to JSON");
                     continue;
                 };
                 let img_container_json_msg = Message::Text(img_container_json.clone());
@@ -511,8 +511,8 @@ async fn handle_socket(
     tokio::select! {
         rv_a = (&mut send_task) => {
             match rv_a {
-                Ok(_) => println!("send_task finished for {who}"),
-                Err(a) => println!("Error sending messages {a:?}")
+                Ok(_) => info!("send_task finished for {who}"),
+                Err(a) => error!("Error sending messages {a:?}")
             }
             recv_task.abort();
             recording_token_clone.cancel();
@@ -520,8 +520,8 @@ async fn handle_socket(
         },
         rv_b = (&mut recv_task) => {
             match rv_b {
-                Ok(()) => println!("recv_task finished for {who}"),
-                Err(b) => println!("Error receiving messages {b:?}")
+                Ok(()) => info!("recv_task finished for {who}"),
+                Err(b) => error!("Error receiving messages {b:?}")
             }
             send_task.abort();
             recording_token_clone.cancel();
@@ -529,8 +529,8 @@ async fn handle_socket(
         },
         rv_c = (&mut recording_task) => {
             match rv_c {
-                Ok(_) => println!("recording_task finished for {who}"),
-                Err(c) => println!("Error recording images {c:?}")
+                Ok(_) => info!("recording_task finished for {who}"),
+                Err(c) => error!("Error recording images {c:?}")
             }
             // ? Maybe do something if recording fails e.g. send a message to the client/DB
         }
@@ -539,43 +539,44 @@ async fn handle_socket(
     // TODO: Update camera in DB to be offline
 
     // returning from the handler closes the websocket connection
-    println!("Websocket context {who} destroyed");
+    info!("Websocket context {who} destroyed");
 }
 
 /// helper to print contents of messages to stdout. Has special treatment for Close.
+#[allow(clippy::cognitive_complexity)]
 fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), ()> {
     match msg {
         Message::Text(t) => {
             if t.len() > 100 {
                 let short_t = &t[..100];
-                println!(">>> {who} sent str: {short_t}...");
+                debug!(">>> {who} sent str: {short_t}...");
             } else {
-                println!(">>> {who} sent str: {t:?}");
+                debug!(">>> {who} sent str: {t:?}");
             }
         }
         Message::Binary(d) => {
-            println!(">>> {} sent {} bytes", who, d.len());
+            debug!(">>> {} sent {} bytes", who, d.len());
         }
         Message::Close(c) => {
             if let Some(cf) = c {
-                println!(
+                info!(
                     ">>> {} sent close with code {} and reason `{}`",
                     who, cf.code, cf.reason
                 );
             } else {
-                println!(">>> {who} somehow sent close message without CloseFrame");
+                error!(">>> {who} somehow sent close message without CloseFrame");
             }
             return ControlFlow::Break(());
         }
 
         Message::Pong(v) => {
-            println!(">>> {who} sent pong with {v:?}");
+            debug!(">>> {who} sent pong with {v:?}");
         }
         // You should never need to manually handle Message::Ping, as axum's websocket library
         // will do so for you automagically by replying with Pong and copying the v according to
         // spec. But if you need the contents of the pings you can see them here.
         Message::Ping(v) => {
-            println!(">>> {who} sent ping with {v:?}");
+            debug!(">>> {who} sent ping with {v:?}");
         }
     }
     ControlFlow::Continue(())
