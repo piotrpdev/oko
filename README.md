@@ -10,80 +10,23 @@ Fully local home security system
 
 </div>
 
-## Build
+## Prerequisites
 
-### Prerequisites
+[OpenCV][opencv] (see [`opencv-rust/INSTALL.md`][opencv-install])
 
-You need to install [OpenCV][opencv]'s dependencies, see [this guide][opencv-install].
-
-### Setup
+## Scripts
 
 ```bash
-cd ./backend
-# Note: This installs support for all SQLx databases
-cargo install sqlx-cli
-sqlx database create
-sqlx migrate run
-```
+./make.sh run
 
-### Run
+./make.sh f     # Run frontend in dev mode
+./make.sh b     # Run backend in dev mode
 
-```bash
-cd ./backend
-cargo run
-```
+./make.sh seed  # Seed DB with dummy data
+./make.sh cam1  # Send dummy camera images
 
-## Development
-
-### Compiler and Linker
-
-This project uses Rust nightly and the [`mold`][mold] linker by default.
-
-```bash
-rustup toolchain install nightly
-sudo apt install mold
-```
-
-### Seeding and Camera Testing
-
-```bash
-cd ./backend
-# Seed with test data
-cat fixtures/*.sql | sqlite3 data.db
-# Send image frames
-cargo run -p camera-impersonator 80 40001 ./videos/2.mp4
-```
-
-### Test
-
-### Run Tests
-
-```bash
-chmod +x test.sh
-./test.sh
-```
-
-#### Check Test Coverage
-
-```bash
-cd ./backend
-cargo install cargo-tarpaulin
-# Create report in Html format (omit --out flag for report in console)
-cargo tarpaulin --out Html
-# Serve however you want
-python3 -m http.server
-# View report
-xdg-open http://localhost:8000/tarpaulin-report.html
-```
-
-### Lint
-
-Linting done using [`pre-commit`][pre-commit].
-
-```bash
-pip install pre-commit
-pre-commit install
-pre-commit run --all-files
+./make.sh test
+./make.sh coverage
 ```
 
 ## License
@@ -113,8 +56,6 @@ video-to-image conversion needs."*][video2image-medium]
 
 [opencv]: https://opencv.org/
 [opencv-install]: https://github.com/twistedfall/opencv-rust/blob/6784a7e74c5cd3e1edced9484d6839d67ee70a12/INSTALL.md
-[mold]: https://github.com/rui314/mold
-[pre-commit]: https://github.com/pre-commit/pre-commit
 [license]: ./LICENSE
 [axum-sqlite]: https://github.com/maxcountryman/axum-login/tree/9c26b37cd03be8d803ae261b7bc556229c2043da/examples/sqlite
 [axum-login-license]: https://github.com/maxcountryman/axum-login/blob/9c26b37cd03be8d803ae261b7bc556229c2043da/LICENSE
