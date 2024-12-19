@@ -11,6 +11,7 @@ description = "Fully local home security system."
 repository = "https://github.com/piotrpdev/oko"
 license = "GPL-3.0-only"
 keywords = ["rust", "axum", "camera", "security", "home"]
+include = [".sqlx/", "migrations/", "src/", "static/", "build.rs"]
 
 [workspace.dependencies]
 futures-util = { version = "0.3.31", default-features = false }

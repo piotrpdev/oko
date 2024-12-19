@@ -105,6 +105,10 @@ impl App {
         let video_path_relative = PathBuf::from(VIDEO_PATH);
         let video_path = video_path_relative.canonicalize()?;
 
+        if !video_path.exists() {
+            std::fs::create_dir_all(&video_path)?;
+        }
+
         Ok(Self {
             db,
             listener,

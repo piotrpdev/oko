@@ -24,7 +24,7 @@ case "$1" in
         cp -r ../$FRONTEND_DIR/dist/* ./static
         cargo run
         ;;
-    "test")
+    "t")
         cd $FRONTEND_DIR
         npm run build
         npm run test
@@ -55,6 +55,10 @@ case "$1" in
     "cam2")
         cd $BACKEND_DIR
         cargo run -p camera-impersonator 80 40001 ./videos/2.mp4
+        ;;
+    "dry_pub")
+        cd $BACKEND_DIR
+        cargo publish --dry-run --allow-dirty
         ;;
     *)
         echo "Invalid argument"

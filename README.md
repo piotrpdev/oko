@@ -17,15 +17,15 @@ Fully local home security system
 ## Scripts
 
 ```bash
-./make.sh run   # Default admin password: "hunter42"
+./make.sh run           # Default admin password: "hunter42"
 
-./make.sh f     # Run frontend in dev mode
-./make.sh b     # Run backend in dev mode
+./make.sh f             # Run frontend in dev mode
+./make.sh b             # Run backend in dev mode
 
-./make.sh seed  # Seed DB with dummy data
-./make.sh cam1  # Send dummy camera images
+./make.sh seed          # Seed DB with dummy data
+./make.sh cam1          # Send dummy camera images
 
-./make.sh test
+./make.sh t             # Run tests
 ./make.sh coverage
 ```
 
