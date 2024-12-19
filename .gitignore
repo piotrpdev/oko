@@ -30,3 +30,4 @@ scripts/.venv/*
 tarpaulin-report.html
 
 static/
+rust-toolchain.toml
