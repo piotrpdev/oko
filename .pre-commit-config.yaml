@@ -21,6 +21,13 @@ repos:
           - id: markdownlint-cli2
     - repo: local
       hooks:
+          - id: sqlx
+            name: sqlx check
+            entry: bash -c 'cd ./backend && cargo sqlx prepare --check'
+            language: system
+            types: [text]
+            files: "\\.(sql|rs)$"
+            pass_filenames: false
           - id: lint
             name: lint
             entry: npm run --prefix ./frontend lint:fix

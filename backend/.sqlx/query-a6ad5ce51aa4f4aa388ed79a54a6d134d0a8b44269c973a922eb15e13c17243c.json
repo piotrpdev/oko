@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO camera_permissions (camera_id, user_id, can_view, can_control)\n            VALUES (?, ?, ?, ?)\n            RETURNING permission_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "permission_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a6ad5ce51aa4f4aa388ed79a54a6d134d0a8b44269c973a922eb15e13c17243c"
+}

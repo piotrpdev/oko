@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO camera_settings\n            (camera_id, flashlight_enabled, resolution, framerate, last_modified, modified_by)\n            VALUES (?, ?, ?, ?, ?, ?)\n            RETURNING setting_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "setting_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7c1b4499fd1aec87d8e93c50f3b5c47e2feac9ff1f852f98b9f9086e34b1f5b3"
+}

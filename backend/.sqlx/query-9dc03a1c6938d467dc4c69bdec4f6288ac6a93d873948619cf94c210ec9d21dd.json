@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE\n            FROM videos\n            WHERE video_id = ?\n            RETURNING video_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "video_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9dc03a1c6938d467dc4c69bdec4f6288ac6a93d873948619cf94c210ec9d21dd"
+}

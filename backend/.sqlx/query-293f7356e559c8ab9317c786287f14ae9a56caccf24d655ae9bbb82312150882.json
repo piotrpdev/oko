@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE videos\n            SET camera_id = ?, end_time = ?, file_size = ?\n            WHERE video_id = ?\n            RETURNING video_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "video_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "293f7356e559c8ab9317c786287f14ae9a56caccf24d655ae9bbb82312150882"
+}

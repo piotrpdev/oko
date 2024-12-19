@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT c.camera_id, c.name as camera_name, cp.can_view, cp.can_control\n            FROM cameras c\n            JOIN camera_permissions cp ON c.camera_id = cp.camera_id\n            WHERE cp.user_id = ? AND cp.can_view\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "camera_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "camera_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "can_view",
+        "ordinal": 2,
+        "type_info": "Bool"
+      },
+      {
+        "name": "can_control",
+        "ordinal": 3,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b9a2faf59ec4363997495c4186c59520065366d196e9f4d20b451f444e1c29fa"
+}

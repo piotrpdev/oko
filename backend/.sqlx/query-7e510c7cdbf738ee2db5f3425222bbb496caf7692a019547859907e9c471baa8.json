@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE\n            FROM users\n            WHERE user_id = ?\n            RETURNING user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7e510c7cdbf738ee2db5f3425222bbb496caf7692a019547859907e9c471baa8"
+}

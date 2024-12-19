@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE camera_settings\n            SET flashlight_enabled = ?, resolution = ?,\n                framerate = ?, last_modified = ?,\n                modified_by = ?\n            WHERE setting_id = ?\n            RETURNING setting_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "setting_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a7f0a1849286c68e800221892268a882fe54187f4faaf45b81d0c2a604fc77b5"
+}

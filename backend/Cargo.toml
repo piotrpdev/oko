@@ -1,15 +1,16 @@
 [workspace]
-members = [ "camera-impersonator", "ws-utils"]
+members = ["utils/camera-impersonator", "utils/ws-utils"]
 
 [package]
-name = "oko-rs"
-version = "0.1.0"
-edition = "2021"
-publish = false
-default-run = "oko-rs"
-
-[lib]
 name = "oko"
+version = "0.0.0"
+authors = ["Piotr Placzek <piotrpdev@gmail.com>"]
+edition = "2021"
+rust-version = "1.73"
+description = "Fully local home security system."
+repository = "https://github.com/piotrpdev/oko"
+license = "GPL-3.0-only"
+keywords = ["rust", "axum", "camera", "security", "home"]
 
 [workspace.dependencies]
 futures-util = { version = "0.3.31", default-features = false }
@@ -40,7 +41,7 @@ tokio-util = { version = "0.7.12", features = ["rt"] }
 [dev-dependencies]
 playwright = { version = "0.0.20", default-features = false, features = ["rt-tokio"] }
 tempfile = "3.14.0"
-ws-utils = { path = "./ws-utils" }
+ws-utils = { path = "utils/ws-utils" }
 
 [lints.rust]
 unsafe_code = "forbid"
