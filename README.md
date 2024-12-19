@@ -19,7 +19,7 @@ You need to install [OpenCV][opencv]'s dependencies, see [this guide][opencv-ins
 ### Setup
 
 ```bash
-cd ./oko-rs
+cd ./backend
 # Note: This installs support for all SQLx databases
 cargo install sqlx-cli
 sqlx database create
@@ -29,19 +29,13 @@ sqlx migrate run
 ### Run
 
 ```bash
-cd ./oko-rs
+cd ./backend
 cargo run
 ```
 
 ## Development
 
 ### Compiler and Linker
-
-<!--
-hyperfine --warmup 3 --min-runs 5 \
-'sed -i -e "s|\"random\"|\"$(date +%Y%m%d%H%M%S)\"|g" \ src/web/app.rs && \
-cargo build'
--->
 
 This project uses Rust nightly and the [`mold`][mold] linker by default.
 
@@ -53,7 +47,7 @@ sudo apt install mold
 ### Seeding and Camera Testing
 
 ```bash
-cd ./oko-rs
+cd ./backend
 # Seed with test data
 cat fixtures/*.sql | sqlite3 data.db
 # Send image frames
@@ -72,7 +66,7 @@ chmod +x test.sh
 #### Check Test Coverage
 
 ```bash
-cd ./oko-rs
+cd ./backend
 cargo install cargo-tarpaulin
 # Create report in Html format (omit --out flag for report in console)
 cargo tarpaulin --out Html

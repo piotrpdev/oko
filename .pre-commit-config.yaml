@@ -23,7 +23,7 @@ repos:
       hooks:
           - id: lint
             name: lint
-            entry: npm run --prefix ./web lint:fix
+            entry: npm run --prefix ./frontend lint:fix
             language: system
             types: [text]
             files: "\\.(html|js|ts|svelte|json)$"
@@ -33,11 +33,11 @@ repos:
             entry: cargo clippy
             language: system
             types: [rust]
-            args: ["--manifest-path", "./oko-rs/Cargo.toml", "--fix", "--allow-dirty", "--allow-staged", "--all-targets"]
+            args: ["--manifest-path", "./backend/Cargo.toml", "--fix", "--allow-dirty", "--allow-staged", "--all-targets"]
             pass_filenames: false
           - id: fmt
             name: fmt
             entry: cargo fmt
             language: system
             types: [rust]
-            args: ["--manifest-path", "./oko-rs/Cargo.toml", "--"]
+            args: ["--manifest-path", "./backend/Cargo.toml", "--"]

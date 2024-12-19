@@ -169,7 +169,7 @@ mod tests {
         assert_eq!(returned_video.camera_id, Some(1));
         assert_eq!(
             returned_video.file_path,
-            "/home/piotrpdev/oko/oko-rs/videos/1.mp4"
+            "/home/piotrpdev/oko/backend/videos/1.mp4"
         );
         assert_eq!(
             returned_video.start_time,
@@ -233,7 +233,7 @@ mod tests {
         assert_eq!(returned_videos.first().unwrap().camera_name, "Front Door");
         assert_eq!(
             returned_videos.first().unwrap().file_path,
-            "/home/piotrpdev/oko/oko-rs/videos/1.mp4"
+            "/home/piotrpdev/oko/backend/videos/1.mp4"
         );
         assert_eq!(returned_videos.first().unwrap().file_size, Some(6_762_403));
 
