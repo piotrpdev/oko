@@ -54,7 +54,15 @@ use crate::{
 
 const SQLITE_URL: &str = "sqlite://data.db";
 const VIDEO_PATH: &str = "./videos/";
+const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const DEFAULT_ADMIN_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw";
+const EXPIRED_SESSION_DELETION_INTERVAL: tokio::time::Duration =
+    tokio::time::Duration::from_secs(60);
+const SESSION_DURATION: Duration = Duration::days(1);
+const RELATIVE_FRONTEND_PATH: &str = "../frontend/dist/";
+const DEFAULT_IMG_WATCH_MESSAGE: &str = "Hello, world!"; // TODO: Use better default message
+const CAMERA_INDICATOR_TEXT: &str = "camera";
+const EMPTY_TASK_SLEEP_DURATION: tokio::time::Duration = tokio::time::Duration::from_millis(100);
 
 // ? Maybe move this somewhere better
 // TODO: Probably change to Protobuf instead of JSON
@@ -101,7 +109,9 @@ impl App {
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // ? Maybe make this optional just in case
-        let admin_exists = User::get_using_username(&self.db, "admin").await.is_ok();
+        let admin_exists = User::get_using_username(&self.db, DEFAULT_ADMIN_USERNAME)
+            .await
+            .is_ok();
         if !admin_exists {
             let mut admin = User {
                 user_id: User::DEFAULT.user_id,
@@ -123,7 +133,7 @@ impl App {
         let deletion_task = tokio::spawn(
             session_store
                 .clone()
-                .continuously_delete_expired(tokio::time::Duration::from_secs(60)),
+                .continuously_delete_expired(EXPIRED_SESSION_DELETION_INTERVAL),
         );
 
         // Generate a cryptographic key to sign the session cookie.
@@ -131,7 +141,7 @@ impl App {
 
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(false)
-            .with_expiry(Expiry::OnInactivity(Duration::days(1)))
+            .with_expiry(Expiry::OnInactivity(SESSION_DURATION))
             .with_signed(key);
 
         // Auth service.
@@ -142,10 +152,9 @@ impl App {
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
         // TODO: Embed the frontend in the binary
-        let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../frontend/dist/");
+        let vite_build_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(RELATIVE_FRONTEND_PATH);
 
-        // TODO: Use better default message
-        let tx = watch::Sender::new(Message::Text("Hello, world!".to_string()));
+        let tx = watch::Sender::new(Message::Text(DEFAULT_IMG_WATCH_MESSAGE.to_string()));
 
         let state = Arc::new(AppState {
             images_tx: tx,
@@ -263,7 +272,7 @@ async fn handle_socket(
 
             match msg {
                 Message::Text(msg_txt) => {
-                    if msg_txt == "camera" {
+                    if msg_txt == CAMERA_INDICATOR_TEXT {
                         println!("{who} is a camera...");
                         is_camera = true;
                     } else {
@@ -388,7 +397,7 @@ async fn handle_socket(
             })
         } else {
             tracker.spawn(async move {
-                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+                let mut interval = tokio::time::interval(EMPTY_TASK_SLEEP_DURATION);
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {},
@@ -461,7 +470,7 @@ async fn handle_socket(
             })
         } else {
             tokio::spawn(async move {
-                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+                let mut interval = tokio::time::interval(EMPTY_TASK_SLEEP_DURATION);
                 loop {
                     interval.tick().await;
                 }
