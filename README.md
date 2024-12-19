@@ -17,7 +17,7 @@ Fully local home security system
 ## Scripts
 
 ```bash
-./make.sh run
+./make.sh run   # Default admin password: "hunter42"
 
 ./make.sh f     # Run frontend in dev mode
 ./make.sh b     # Run backend in dev mode

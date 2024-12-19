@@ -43,7 +43,7 @@ impl AuthUser for User {
 
 #[allow(dead_code)]
 pub struct Default {
-    user_id: i64,
+    pub user_id: i64,
 }
 
 impl Default {

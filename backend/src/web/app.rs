@@ -49,11 +49,12 @@ use axum::{
 use crate::{
     users::{AuthSession, Backend},
     web::{auth, protected},
-    Camera, CameraPermissionView, Model, Video,
+    Camera, CameraPermissionView, Model, User, Video,
 };
 
 const SQLITE_URL: &str = "sqlite://data.db";
 const VIDEO_PATH: &str = "./videos/";
+const DEFAULT_ADMIN_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw";
 
 // ? Maybe move this somewhere better
 // TODO: Probably change to Protobuf instead of JSON
@@ -99,6 +100,19 @@ impl App {
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // ? Maybe make this optional just in case
+        let admin_exists = User::get_using_username(&self.db, "admin").await.is_ok();
+        if !admin_exists {
+            let mut admin = User {
+                user_id: User::DEFAULT.user_id,
+                username: "admin".to_string(),
+                password_hash: DEFAULT_ADMIN_PASS_HASH.to_owned(),
+                created_at: User::DEFAULT.created_at(),
+            };
+
+            admin.create_using_self(&self.db).await?;
+        }
+
         // Session layer.
         //
         // This uses `tower-sessions` to establish a layer that will provide the session
