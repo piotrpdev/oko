@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE\n            FROM cameras\n            WHERE camera_id = ?\n            RETURNING camera_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "camera_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "56545409edd43f0cb5a88a2d32ec1eebc079813dde1b8ebe5194e4ea47684f9e"
+}

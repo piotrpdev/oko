@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE\n            FROM camera_permissions\n            WHERE permission_id = ?\n            RETURNING permission_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "permission_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ab7d9685379f0b632dbde28d3bf98faebf17ca02fe8c57de0b78d8814baeede1"
+}

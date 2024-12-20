@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT v.video_id, v.camera_id, c.name as camera_name, v.file_path, v.file_size\n            FROM videos v\n            JOIN cameras c ON v.camera_id = c.camera_id\n            WHERE c.camera_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "video_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "camera_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "camera_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_path",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_size",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1c5823784ebd997b832c5e8ac9d19f304311d29f985166c3c3c8b7d56570f2e1"
+}

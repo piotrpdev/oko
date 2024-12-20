@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO videos (camera_id, file_path, start_time, end_time, file_size)\n            VALUES (?, ?, ?, ?, ?)\n            RETURNING video_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "video_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c4dccf310d73d1603e7e6fdaa06a8255faef7571880d03035e70a20a675e403d"
+}

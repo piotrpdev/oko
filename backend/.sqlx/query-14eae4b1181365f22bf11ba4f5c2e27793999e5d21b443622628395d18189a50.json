@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT cp.permission_id, cp.camera_id, cp.user_id, u.username, cp.can_view, cp.can_control\n            FROM camera_permissions cp\n            JOIN users u ON cp.user_id = u.user_id\n            WHERE cp.camera_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "permission_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "camera_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "username",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "can_view",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "can_control",
+        "ordinal": 5,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "14eae4b1181365f22bf11ba4f5c2e27793999e5d21b443622628395d18189a50"
+}

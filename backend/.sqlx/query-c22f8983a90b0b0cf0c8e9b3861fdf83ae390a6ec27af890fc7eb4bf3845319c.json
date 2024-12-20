@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE users\n            SET username = ?, password_hash = ?, created_at = ?\n            WHERE user_id = ?\n            RETURNING user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c22f8983a90b0b0cf0c8e9b3861fdf83ae390a6ec27af890fc7eb4bf3845319c"
+}

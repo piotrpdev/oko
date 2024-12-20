@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO cameras (name, ip_address, last_connected, is_active)\n            VALUES (?, ?, ?, ?)\n            RETURNING camera_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "camera_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f91695149df3f5047a94a0882198af7c5b20d799621aa1847f264ee152e15010"
+}

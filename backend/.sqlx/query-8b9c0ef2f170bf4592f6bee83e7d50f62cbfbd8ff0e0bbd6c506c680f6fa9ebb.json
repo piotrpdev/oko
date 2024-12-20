@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT *\n            FROM camera_permissions\n            WHERE permission_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "permission_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "camera_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "can_view",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "can_control",
+        "ordinal": 4,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8b9c0ef2f170bf4592f6bee83e7d50f62cbfbd8ff0e0bbd6c506c680f6fa9ebb"
+}

@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT setting_id, camera_id, flashlight_enabled, resolution,\n                   framerate, last_modified, modified_by\n            FROM camera_settings WHERE setting_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "setting_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "camera_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "flashlight_enabled",
+        "ordinal": 2,
+        "type_info": "Bool"
+      },
+      {
+        "name": "resolution",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "framerate",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_modified",
+        "ordinal": 5,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "modified_by",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "729f5b639b7b1483c1d930759ef097ad87904506e3c5e3c5cd7127b4b22534f7"
+}

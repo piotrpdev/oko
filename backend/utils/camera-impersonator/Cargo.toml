@@ -1,0 +1,10 @@
+[package]
+name = "camera-impersonator"
+edition = "2021"
+publish = false
+
+[dependencies]
+futures-util = { workspace = true }
+opencv = { workspace = true }
+tokio = { workspace = true }
+ws-utils = { path = "../ws-utils" }

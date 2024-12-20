@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE cameras\n            SET name = ?, ip_address = ?, last_connected = ?, is_active = ?\n            WHERE camera_id = ?\n            RETURNING camera_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "camera_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4fe0e59278db1e7664d96b7355933f5a9ac9c10d143a44138bf8afaa70d7b654"
+}

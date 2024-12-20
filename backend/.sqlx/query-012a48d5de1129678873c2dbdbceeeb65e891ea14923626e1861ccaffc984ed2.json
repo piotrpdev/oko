@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT *\n            FROM cameras\n            WHERE ip_address = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "camera_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "ip_address",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_connected",
+        "ordinal": 3,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "is_active",
+        "ordinal": 4,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "012a48d5de1129678873c2dbdbceeeb65e891ea14923626e1861ccaffc984ed2"
+}
