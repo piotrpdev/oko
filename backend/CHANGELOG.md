@@ -1,0 +1,29 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0](https://github.com/piotrpdev/oko/releases/tag/oko-v0.1.0) - 2024-12-20
+
+### Added
+
+- *(backend)* embed static assets
+- default admin user
+
+### Fixed
+
+- *(backend)* create `videos/` before `canonicalize()`
+
+### Other
+
+- release workflow
+- *(backend)* start at `0.1.0`
+- include `static/`, auto-generate `videos/`
+- *(backend)* use `tracing` instead of `println!`
+- extract some hardcoded backend values
+- prepare oko crate for publish
+- nicer project structure
