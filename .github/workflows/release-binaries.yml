@@ -1,0 +1,85 @@
+# Taken from https://release-plz.dev/docs/extra/releasing-binaries
+name: Release binaries
+
+permissions:
+  contents: write
+
+on:
+  release:
+    types: [published]
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  upload-assets:
+    name: ${{ matrix.target }}
+    if: startsWith(github.event.release.name, 'oko-v')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4.1.0
+        with:
+          node-version: 22
+          cache-dependency-path: ./frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ./frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: ./frontend
+
+      - name: Copy frontend build to backend
+        run: |
+          mkdir -p static
+          cp -r ../frontend/dist/* ./static
+        working-directory: ./backend
+
+      # https://github.com/twistedfall/opencv-rust/blob/master/ci/install-ubuntu.sh#L27
+      - name: Use clang workaround
+        run: sudo ln -fs libclang.so.1 /usr/lib/llvm-14/lib/libclang.so
+
+      - name: Restore Apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+        with:
+          packages: libopencv-dev
+          version: "1.0"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.81.0
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2.7.3
+        with:
+          workspaces: ./backend
+
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: oko
+          target: ${{ matrix.target }}
+          tar: all
+          token: ${{ secrets.GITHUB_TOKEN }}
+          manifest_path: ./backend/Cargo.toml
