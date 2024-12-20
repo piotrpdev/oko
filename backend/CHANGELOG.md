@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/piotrpdev/oko/compare/oko-v0.1.0...oko-v0.1.1) - 2024-12-20
+
+### Added
+
+- *(backend)* log listening address
+
 ## [0.1.0](https://github.com/piotrpdev/oko/releases/tag/oko-v0.1.0) - 2024-12-20
 
 ### Added
