@@ -42,8 +42,8 @@ export default defineConfig({
       },
 
       manifest: {
-        name: "oko",
-        short_name: "oko",
+        name: "Oko",
+        short_name: "Oko",
         description: "Fully local home security system",
         theme_color: "#ffffff",
       },
