@@ -102,6 +102,8 @@ impl App {
 
         let listener = tokio::net::TcpListener::bind(addr).await?;
 
+        info!("Listening on: {}", addr);
+
         let video_path_relative = PathBuf::from(VIDEO_PATH);
 
         if !video_path_relative.exists() {
