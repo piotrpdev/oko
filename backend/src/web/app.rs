@@ -112,6 +112,8 @@ impl App {
 
         let video_path = video_path_relative.canonicalize()?;
 
+        debug!("Video path: {:?}", video_path);
+
         Ok(Self {
             db,
             listener,
