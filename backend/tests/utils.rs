@@ -43,8 +43,8 @@ pub async fn setup(
     (Playwright, BrowserContext, String, SocketAddr, TempDir),
     Box<dyn std::error::Error + Send + Sync>,
 > {
-    let playwright = Playwright::initialize().await?;
-    playwright.prepare()?;
+    let playwright: Playwright = Playwright::initialize().await?;
+    playwright.install_chromium()?;
     let chromium = playwright.chromium();
     let browser = chromium.launcher().headless(true).launch().await?;
     let context = browser
