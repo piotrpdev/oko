@@ -74,6 +74,7 @@ struct EmbeddedAssets;
 pub struct ImageContainer {
     pub camera_id: i64,
     pub timestamp: i64,
+    #[serde(with = "serde_bytes")]
     pub image_bytes: Vec<u8>,
 }
 
