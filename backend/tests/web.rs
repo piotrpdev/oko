@@ -515,10 +515,13 @@ async fn multi_camera_record(
 
     let sent_frame_count = 20;
 
+    // TODO: Lower sleep time after optimizing video recording. Currently frames are being skipped too often.
     for _ in 0..sent_frame_count {
         camera_1_ws_stream
             .send(Message::Binary(utils::REAL_TEST_IMG_1.into()))
             .await?;
+
+        sleep(Duration::from_millis(80)).await;
 
         camera_2_ws_stream
             .send(Message::Binary(utils::REAL_TEST_IMG_2.into()))
@@ -573,6 +576,7 @@ async fn multi_camera_record(
         camera_2_created_video_cap.get(CAP_PROP_FRAME_COUNT)?;
     let camera_2_frame_count_diff = (camera_2_created_video_frame_count - 20.0).abs();
     // ! This is flaky, can fail sometimes
+    dbg!(camera_1_frame_count_diff);
     assert!(camera_1_frame_count_diff <= 3.0);
     assert!(camera_2_frame_count_diff <= 3.0);
 

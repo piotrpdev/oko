@@ -353,6 +353,7 @@ async fn handle_socket(
                     file_size: None,
                 };
 
+                // ? Maybe don't create video until first frame (or maybe doing this is actually a good approach)?
                 video.create_using_self(&auth_session.backend.db).await?;
 
                 // TODO: Don't hardcode these
@@ -374,15 +375,19 @@ async fn handle_socket(
                         debug!("Recording image from {who}...");
                         let message_parsed_json =
                             serde_json::from_str::<ImageContainer>(&message_text)?;
-                        let message_data_vec = message_parsed_json.image_bytes;
-                        // let message_data_vec = message.into_data();
-                        let message_data_vec_slice = message_data_vec.as_slice();
-                        let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
 
-                        // TODO: Handle error here
-                        // ? Does calling this function too often/quickly risk a crash? Use a buffer/batch?
-                        video_writer.write(&decoded_image)?;
-                        total_bytes += message_data_vec_slice.len();
+                        // ? Parsing JSON for every image just to see if the camera matches is wasteful, is there a better way?
+                        if message_parsed_json.camera_id == camera_id {
+                            let message_data_vec = message_parsed_json.image_bytes;
+                            // let message_data_vec = message.into_data();
+                            let message_data_vec_slice = message_data_vec.as_slice();
+                            let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
+
+                            // TODO: Handle error here
+                            // ? Does calling this function too often/quickly risk a crash? Use a buffer/batch?
+                            video_writer.write(&decoded_image)?;
+                            total_bytes += message_data_vec_slice.len();
+                        }
                     }
 
                     tokio::select! {
