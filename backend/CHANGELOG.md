@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/piotrpdev/oko/compare/oko-v0.1.2...oko-v0.1.3) - 2025-01-04
+
+### Fixed
+
+- check camera_id before writing frame
+
 ## [0.1.2](https://github.com/piotrpdev/oko/compare/oko-v0.1.1...oko-v0.1.2) - 2024-12-20
 
 ### Added
