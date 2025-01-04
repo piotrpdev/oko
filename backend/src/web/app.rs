@@ -61,7 +61,6 @@ const DEFAULT_ADMIN_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7Dal
 const EXPIRED_SESSION_DELETION_INTERVAL: tokio::time::Duration =
     tokio::time::Duration::from_secs(60);
 const SESSION_DURATION: Duration = Duration::days(1);
-const DEFAULT_IMG_WATCH_MESSAGE: &str = "Hello, world!"; // TODO: Use better default message
 const CAMERA_INDICATOR_TEXT: &str = "camera";
 const EMPTY_TASK_SLEEP_DURATION: tokio::time::Duration = tokio::time::Duration::from_millis(100);
 
@@ -79,7 +78,7 @@ pub struct ImageContainer {
 }
 
 struct AppState {
-    images_tx: watch::Sender<Message>,
+    images_tx: watch::Sender<ImageContainer>,
     video_path: PathBuf,
 }
 
@@ -167,7 +166,11 @@ impl App {
 
         let embedded_assets_service = ServeEmbed::<EmbeddedAssets>::new();
 
-        let tx = watch::Sender::new(Message::Text(DEFAULT_IMG_WATCH_MESSAGE.to_string()));
+        let tx = watch::Sender::new(ImageContainer {
+            camera_id: -1,
+            timestamp: -1,
+            image_bytes: vec![],
+        });
 
         let state = Arc::new(AppState {
             images_tx: tx,
@@ -369,16 +372,13 @@ async fn handle_socket(
                 loop {
                     // TODO: this might not be the best way of doing this
                     let message = (*images_rx_rec.borrow_and_update()).clone();
-                    let message_text = message.into_text()?;
 
                     if first_received {
                         debug!("Recording image from {who}...");
-                        let message_parsed_json =
-                            serde_json::from_str::<ImageContainer>(&message_text)?;
 
                         // ? Parsing JSON for every image just to see if the camera matches is wasteful, is there a better way?
-                        if message_parsed_json.camera_id == camera_id {
-                            let message_data_vec = message_parsed_json.image_bytes;
+                        if message.camera_id == camera_id {
+                            let message_data_vec = message.image_bytes;
                             // let message_data_vec = message.into_data();
                             let message_data_vec_slice = message_data_vec.as_slice();
                             let decoded_image = imdecode(&message_data_vec_slice, IMREAD_COLOR)?;
@@ -446,22 +446,20 @@ async fn handle_socket(
                 loop {
                     // TODO: this might not be the best way of doing this
                     let message = (*images_rx.borrow_and_update()).clone();
-                    let message_text = message.clone().into_text()?;
 
                     if first_received {
                         debug!("Sending message to {who}...");
 
-                        let message_parsed_json =
-                            serde_json::from_str::<ImageContainer>(&message_text)?;
-                        if !cameras
-                            .iter()
-                            .any(|c| c.camera_id == message_parsed_json.camera_id)
-                        {
+                        if !cameras.iter().any(|c| c.camera_id == message.camera_id) {
                             continue;
                         }
 
+                        // TODO: look into bincode (fastest?) / rmp-serde (wide support) / flatbuffers (partial deserialization)
+                        let message_json = serde_json::to_string(&message)?;
+                        let message_json_msg = Message::Text(message_json.clone());
+
                         // TODO: Handle error here
-                        let _ = sender.send(message).await;
+                        let _ = sender.send(message_json_msg).await;
                     }
 
                     if images_rx.changed().await.is_err() {
@@ -512,14 +510,8 @@ async fn handle_socket(
                     timestamp: OffsetDateTime::now_utc().unix_timestamp(),
                     image_bytes: msg.into_data(),
                 };
-                // ? Storing as string here might not be the best idea
-                let Ok(img_container_json) = serde_json::to_string(&img_container) else {
-                    error!("Error serializing image container to JSON");
-                    continue;
-                };
-                let img_container_json_msg = Message::Text(img_container_json.clone());
 
-                let _ = state.images_tx.send(img_container_json_msg);
+                let _ = state.images_tx.send(img_container);
             }
         }
     });
