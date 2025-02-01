@@ -49,7 +49,9 @@ Made using the following resources:
 | [opencv-rs example code][opencv-example]  | [MIT][opencv-license]             |
 | [tungstenite examples][tungsten-example]  | [MIT][tungsten-license]           |
 | [shadcn Blocks][shadcn-blocks]            | [MIT][shadcn-license]             |
-| [ESP32-CAM example code][esp32-cam]	    | [GNU LGPL][cam-license]		|
+| [ESP32-CAM example code][esp32-cam]       | [GNU LGPLv2.1][cam-license]       |
+| [ArduinoWebsockets examples][ws-example]  | [GNU GPLv3.0][ws-license]         |
+| [ESPAsyncWebServer examples][espa-example]| [GNU LGPLv3.0][espa-license]      |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -84,5 +86,9 @@ video-to-image conversion needs."*][video2image-medium]
 [shadcn-license]: https://github.com/huntabyte/shadcn-svelte/blob/main/LICENSE.md
 [esp32-cam]: https://github.com/espressif/arduino-esp32/tree/master/libraries/ESP32/examples/Camera/CameraWebServer
 [cam-license]: https://github.com/espressif/arduino-esp32/blob/master/LICENSE.md
+[ws-example]: https://github.com/gilmaimon/ArduinoWebsockets/tree/master/examples
+[ws-license]: https://github.com/gilmaimon/ArduinoWebsockets/blob/master/LICENSE
+[espa-example]: https://github.com/ESP32Async/ESPAsyncWebServer/tree/main/examples
+[espa-license]: https://github.com/ESP32Async/ESPAsyncWebServer/blob/main/LICENSE
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->
