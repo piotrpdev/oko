@@ -5,11 +5,17 @@
 #include <LittleFS.h>
 #include <ArduinoWebsockets.h>
 #include <Preferences.h>
+#include <DNSServer.h>
 
 // Upload with "Huge APP" partition scheme for LittleFS to work
 // Upload data/*.html using https://github.com/earlephilhower/arduino-littlefs-upload ([Ctrl] + [Shift] + [P], then "Upload LittleFS to Pico/ESP8266/ESP32")
+// Prefs are saved across RST. Hit RST then hold IO0 (don't hold both) to reset Wi-Fi (flash will fire).
 
 // TODO: Only handle one connection at a time
+// TODO: Adjust lamp brightness (setup ledc)
+// TODO: Display possible networks to connect to
+// TODO: After setup, display success message/tell user to restart
+// TODO: Auto-restart using ESP.restart() instead of manual (absolutely make sure it won't cause a restart loop)
 // TODO: Investigate if TLS/encrypting images is too resource intensive
 
 // CAMERA_MODEL_AI_THINKER pins
@@ -38,15 +44,17 @@
 
 static AsyncWebServer server(80);
 
-Preferences preferences;
+static Preferences preferences;
 
-// WiFi Details
-const char* ssid = "VM9493530";
-const char* password = "hnxZefs2abFifxad";
+// AP WiFi Details
+static DNSServer dnsServer;
+const char* ap_ssid = "ESP32-CAM Setup";
+const char* ap_password = NULL;
+static bool needs_setup = true;
 
 const char* websockets_server_host = "192.168.0.28"; //Enter server adress
 const uint16_t websockets_server_port = 8080; // Enter server port
-websockets::WebsocketsClient client;
+static websockets::WebsocketsClient client;
 
 esp_err_t setupCamera() {
   camera_config_t config;
@@ -81,7 +89,20 @@ esp_err_t setupCamera() {
   return esp_camera_init(&config);
 }
 
+class CaptiveRequestHandler : public AsyncWebHandler {
+public:
+  bool canHandle(AsyncWebServerRequest *request) override {
+    return request->url() != "/setup.html";
+  }
+
+  void handleRequest(AsyncWebServerRequest *request) {
+    request->redirect("http://" + WiFi.softAPIP().toString() + "/setup.html");
+  }
+};
+
 void startAsyncCameraServer() {
+  server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
+
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     // TODO: Redirect depending on if already set-up or not
     request->redirect("/setup.html");
@@ -121,6 +142,7 @@ void startWebSocketConnection() {
         Serial.println("Connected!");
         client.send("Hello Server");
     } else {
+        // Remmember to check firewall
         Serial.println("Not Connected!");
     }
     
@@ -146,37 +168,54 @@ void setup() {
   String pref_pass = preferences.getString("pass", "");
   preferences.end();
 
-  if (!pref_ssid.isEmpty() && !pref_pass.isEmpty()) {
-    Serial.println("Connecting to Wi-Fi using saved details");
-    WiFi.begin(pref_ssid, pref_pass);
-  } else {
-    Serial.println("Connecting to Wi-Fi using default details");
-    WiFi.begin(ssid, password);
-  }
+  needs_setup = pref_ssid.isEmpty() || pref_pass.isEmpty();
 
-  WiFi.setSleep(false);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-
-    if (digitalRead(FACTORY_RESET_PIN) == LOW) {
-      Serial.println("FACTORY_RESET_PIN held LOW, resetting preferences");
-
-      digitalWrite(LAMP_PIN, HIGH);
-
-      preferences.begin("wifi", false);
-      preferences.putString("ssid", "");
-      preferences.putString("pass", "");
-      preferences.end();
-
-      delay(1000);
-
-      digitalWrite(LAMP_PIN, LOW);
+  if (needs_setup) {
+    Serial.println("Creating AP for initial user setup");
+    WiFi.mode(WIFI_AP);
+    if (!WiFi.softAP(ap_ssid, ap_password)) {
+      Serial.println("Soft AP creation failed.");
+      return;
     }
+    WiFi.setSleep(false);
+    dnsServer.start(53, "*", WiFi.softAPIP());
+    Serial.println("");
+    Serial.println("AP created");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.softAPIP());
+  } else {
+    Serial.println("Connecting to Wi-Fi using saved details");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(pref_ssid, pref_pass);
+    WiFi.setSleep(false);
+
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+
+      // GPI0 gets used as CLK later on, so can only use it before esp_camera_init() is called
+      if (digitalRead(FACTORY_RESET_PIN) == LOW) {
+        Serial.println("FACTORY_RESET_PIN held LOW, resetting preferences");
+
+        digitalWrite(LAMP_PIN, HIGH);
+
+        preferences.begin("wifi", false);
+        preferences.putString("ssid", "");
+        preferences.putString("pass", "");
+        preferences.end();
+
+        delay(1000);
+
+        digitalWrite(LAMP_PIN, LOW);
+
+        Serial.println("Preferences reset, use RST to restart device");
+      }
+    }
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
 
   esp_err_t err = setupCamera();
   if (err != ESP_OK) {
@@ -186,16 +225,16 @@ void setup() {
 
   startAsyncCameraServer();
 
-  startWebSocketConnection();
-
-  Serial.print("Camera Ready! Use 'http://");
-  Serial.print(WiFi.localIP());
-  Serial.println("' to connect");
+  // startWebSocketConnection();
 }
 
 void loop() {
-  if (client.available()) {
-    client.poll();
+  if (needs_setup) {
+    dnsServer.processNextRequest();
+  } else {
+    if (client.available()) {
+      client.poll();
+    }
+    delay(500);
   }
-  delay(500);
 }
