@@ -4,9 +4,13 @@
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include <ArduinoWebsockets.h>
+#include <Preferences.h>
 
 // Upload with "Huge APP" partition scheme for LittleFS to work
 // Upload data/*.html using https://github.com/earlephilhower/arduino-littlefs-upload ([Ctrl] + [Shift] + [P], then "Upload LittleFS to Pico/ESP8266/ESP32")
+
+// TODO: Only handle one connection at a time
+// TODO: Investigate if TLS/encrypting images is too resource intensive
 
 // CAMERA_MODEL_AI_THINKER pins
 #define PWDN_GPIO_NUM     32
@@ -30,7 +34,11 @@
 #define LED_PIN           33
 #define LAMP_PIN           4
 
+#define FACTORY_RESET_PIN  0
+
 static AsyncWebServer server(80);
+
+Preferences preferences;
 
 // WiFi Details
 const char* ssid = "VM9493530";
@@ -75,10 +83,34 @@ esp_err_t setupCamera() {
 
 void startAsyncCameraServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->redirect("/index.html");
+    // TODO: Redirect depending on if already set-up or not
+    request->redirect("/setup.html");
   });
 
-  server.serveStatic("/index.html", LittleFS, "/index.html");
+  server.on("/setup.html", HTTP_POST, [](AsyncWebServerRequest *request) {
+    // TODO: Don't do anything if already set-up?
+    String ssid_param = "";
+    if (request->hasParam("ssid", true)) {
+      ssid_param = request->getParam("ssid", true)->value();
+    }
+
+    String pass_param = "";
+    if (request->hasParam("pass", true)) {
+      pass_param = request->getParam("pass", true)->value();
+    }
+
+    if (!ssid_param.isEmpty() && !pass_param.isEmpty()) {
+      Serial.println("Storing Wi-Fi details");
+      preferences.begin("wifi", false);
+      preferences.putString("ssid", ssid_param);
+      preferences.putString("pass", pass_param);
+      preferences.end();
+    }
+
+    request->redirect("/setup.html");
+  });
+
+  server.serveStatic("/setup.html", LittleFS, "/setup.html");
 
   server.begin();
 }
@@ -104,23 +136,53 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
 
+  pinMode(FACTORY_RESET_PIN, INPUT);
+  pinMode(LAMP_PIN, OUTPUT);
+
   LittleFS.begin(true);
+
+  preferences.begin("wifi", false);
+  String pref_ssid = preferences.getString("ssid", "");
+  String pref_pass = preferences.getString("pass", "");
+  preferences.end();
+
+  if (!pref_ssid.isEmpty() && !pref_pass.isEmpty()) {
+    Serial.println("Connecting to Wi-Fi using saved details");
+    WiFi.begin(pref_ssid, pref_pass);
+  } else {
+    Serial.println("Connecting to Wi-Fi using default details");
+    WiFi.begin(ssid, password);
+  }
+
+  WiFi.setSleep(false);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+
+    if (digitalRead(FACTORY_RESET_PIN) == LOW) {
+      Serial.println("FACTORY_RESET_PIN held LOW, resetting preferences");
+
+      digitalWrite(LAMP_PIN, HIGH);
+
+      preferences.begin("wifi", false);
+      preferences.putString("ssid", "");
+      preferences.putString("pass", "");
+      preferences.end();
+
+      delay(1000);
+
+      digitalWrite(LAMP_PIN, LOW);
+    }
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
 
   esp_err_t err = setupCamera();
   if (err != ESP_OK) {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
-
-  WiFi.begin(ssid, password);
-  WiFi.setSleep(false);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
 
   startAsyncCameraServer();
 

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-CAM Setup</title>
+    <style>
+        * {
+            font-family: monospace;
+        }
+        
+        :root {
+            --background-color: #09090b;
+            --text-color: white;
+            --border-color: hsl(0, 0%, 20%);
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        h1 {
+            margin: 0 0 1em 0;
+        }
+
+        main {
+            border: solid 1px var(--border-color);
+            border-radius: 10px;
+            padding: 2em;
+        }
+
+        form, form > div {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: small;
+        }
+
+        input {
+            border: solid 1px var(--border-color);
+            border-radius: 5px;
+            padding: 0.5em;
+            margin: 1em 0;
+
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        button {
+            border: none;
+            border-radius: 5px;
+            padding: 0.5em;
+            margin-top: 2em;
+            
+            background-color: var(--text-color);
+            color: var(--background-color);
+            
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>ESP32-CAM Setup</h1>
+
+        <form method="post">
+            <div>
+              <label for="ssid">Wi-Fi SSID</label>
+              <input name="ssid" id="ssid" required />
+            </div>
+            <br>
+            <div>
+              <label for="pass">Wi-Fi Password</label>
+              <input name="pass" id="pass" required />
+            </div>
+            <div>
+              <button type="submit">Submit</button>
+            </div>
+        </form>    
+    </main>  
+</body>
+</html>
