@@ -7,6 +7,7 @@
 #include <Preferences.h>
 #include <DNSServer.h>
 
+// Default Windows 11 CH340 drivers might cause issues https://forum.arduino.cc/t/a-device-attached-to-the-system-is-not-functioning/1165392/9
 // Upload with "Huge APP" partition scheme for LittleFS to work
 // Upload data/*.html using https://github.com/earlephilhower/arduino-littlefs-upload ([Ctrl] + [Shift] + [P], then "Upload LittleFS to Pico/ESP8266/ESP32")
 // Prefs are saved across RST. Hit RST then hold IO0 (don't hold both) to reset Wi-Fi (flash will fire).
@@ -16,7 +17,7 @@
 // TODO: Display possible networks to connect to
 // TODO: After setup, display success message/tell user to restart
 // TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
-// TODO: Add input validation
+// TODO: Add input validation after trimming e.g. alphanumeric (in arduino lib), length, basic ipv4 validation, allows spaces, etc. https://docs.arduino.cc/built-in-examples/strings/CharacterAnalysis/
 
 // CAMERA_MODEL_AI_THINKER pins
 #define PWDN_GPIO_NUM     32
@@ -90,7 +91,8 @@ esp_err_t setupCamera() {
 class CaptiveRequestHandler : public AsyncWebHandler {
 public:
   bool canHandle(AsyncWebServerRequest *request) override {
-    return request->url() != "/setup.html";
+    String url = request->url();
+    return url != "/setup.html" && url != "/setup.html#success" && url != "/setup.html#error";
   }
 
   void handleRequest(AsyncWebServerRequest *request) {
@@ -108,23 +110,51 @@ void startAsyncCameraServer() {
 
   server.on("/setup.html", HTTP_POST, [](AsyncWebServerRequest *request) {
     // TODO: Don't do anything if already set-up?
+
+    // https://paginas.fe.up.pt/~jaime/0506/SSR/802.11i-2004.pdf
+    // SSID is basically arbitrary data, spec says pretty much anything is allowed (hopefully no exploit here)
     String ssid_param = "";
     if (request->hasParam("ssid", true)) {
       ssid_param = request->getParam("ssid", true)->value();
+      ssid_param.trim();
     }
+    bool ssid_param_valid = !ssid_param.isEmpty() && ssid_param.length() <= 32;
 
     String pass_param = "";
     if (request->hasParam("pass", true)) {
       pass_param = request->getParam("pass", true)->value();
+      pass_param.trim();
     }
+    bool pass_param_valid = !pass_param.isEmpty() && pass_param.length() >= 8 && pass_param.length() <= 63;
 
+    // Oko IP e.g. 192.168.0.28:8080
     String oko_param = "";
     if (request->hasParam("oko", true)) {
       oko_param = request->getParam("oko", true)->value();
+      oko_param.trim();
+    }
+    bool oko_param_valid = false;
+    // X.X.X.X:XXXXX -> XXX.XXX.XXX.XXX:XXXXX
+    // TODO: This code probably isn't fully safe, check for buffer/integer overflows
+    if (oko_param.length() >= 9 && oko_param.length() <= 21) {
+      int ip[5];
+      int parsed_value_count = sscanf(oko_param.c_str(), "%u.%u.%u.%u:%u", &ip[0], &ip[1], &ip[2], &ip[3], &ip[4]);
+      int valid_count = 0;
+      if (parsed_value_count == 5) {
+        for (int i = 0; i < 5; i++) {
+          if (i < 4 && (ip[i] >= 0 && ip[i] <= 255)) {
+            valid_count++;
+          } else if (i == 4 && (ip[i] > 0 && ip[i] <= 65535)) {
+            valid_count++;
+          }
+        }
+      }
+      if (valid_count == 5) {
+        oko_param_valid = true;
+      }
     }
 
-    bool valid = !ssid_param.isEmpty() && !pass_param.isEmpty() && !oko_param.isEmpty();
-
+    bool valid = ssid_param_valid && pass_param_valid && oko_param_valid;
     if (valid) {
       Serial.println("Storing Wi-Fi details");
       preferences.begin("prefs", false);
@@ -132,13 +162,14 @@ void startAsyncCameraServer() {
       preferences.putString("pass", pass_param);
       preferences.putString("oko", oko_param);
       preferences.end();
-    }
 
-    request->redirect("/setup.html");
+      request->redirect("/setup.html#success");
 
-    if (valid) {
       Serial.println("Restarting with new Wi-Fi details");
       ESP.restart();
+    } else {
+      Serial.println("Invalid setup form submitted");
+      request->redirect("/setup.html#error");
     }
   });
 
