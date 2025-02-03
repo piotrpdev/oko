@@ -73,7 +73,7 @@ jobs:
         run: sudo ln -fs libclang.so.1 /usr/lib/llvm-14/lib/libclang.so
 
       - name: Restore Apt packages
-        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.3
         with:
           packages: libopencv-dev
           version: "1.0"
