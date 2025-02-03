@@ -15,8 +15,8 @@
 // TODO: Adjust lamp brightness (setup ledc)
 // TODO: Display possible networks to connect to
 // TODO: After setup, display success message/tell user to restart
-// TODO: Auto-restart using ESP.restart() instead of manual (absolutely make sure it won't cause a restart loop)
-// TODO: Investigate if TLS/encrypting images is too resource intensive
+// TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
+// TODO: Add input validation
 
 // CAMERA_MODEL_AI_THINKER pins
 #define PWDN_GPIO_NUM     32
@@ -52,8 +52,6 @@ const char* ap_ssid = "ESP32-CAM Setup";
 const char* ap_password = NULL;
 static bool needs_setup = true;
 
-const char* websockets_server_host = "192.168.0.28"; //Enter server adress
-const uint16_t websockets_server_port = 8080; // Enter server port
 static websockets::WebsocketsClient client;
 
 esp_err_t setupCamera() {
@@ -120,15 +118,28 @@ void startAsyncCameraServer() {
       pass_param = request->getParam("pass", true)->value();
     }
 
-    if (!ssid_param.isEmpty() && !pass_param.isEmpty()) {
+    String oko_param = "";
+    if (request->hasParam("oko", true)) {
+      oko_param = request->getParam("oko", true)->value();
+    }
+
+    bool valid = !ssid_param.isEmpty() && !pass_param.isEmpty() && !oko_param.isEmpty();
+
+    if (valid) {
       Serial.println("Storing Wi-Fi details");
-      preferences.begin("wifi", false);
+      preferences.begin("prefs", false);
       preferences.putString("ssid", ssid_param);
       preferences.putString("pass", pass_param);
+      preferences.putString("oko", oko_param);
       preferences.end();
     }
 
     request->redirect("/setup.html");
+
+    if (valid) {
+      Serial.println("Restarting with new Wi-Fi details")
+      ESP.restart();
+    }
   });
 
   server.serveStatic("/setup.html", LittleFS, "/setup.html");
@@ -137,20 +148,29 @@ void startAsyncCameraServer() {
 }
 
 void startWebSocketConnection() {
-  bool connected = client.connect(websockets_server_host, websockets_server_port, "/");
-    if (connected) {
-        Serial.println("Connected!");
-        client.send("Hello Server");
-    } else {
-        // Remmember to check firewall
-        Serial.println("Not Connected!");
-    }
+  preferences.begin("prefs", false);
+  String pref_oko = preferences.getString("oko", "");
+  preferences.end();
+
+  if (pref_oko.isEmpty()) {
+    Serial.println("Oko IP address not set, skipping WebSocket setup");
+    return;
+  }
+
+  bool connected = client.connect("ws://" + pref_oko + "/");
+  if (connected) {
+      Serial.println("Connected!");
+      client.send("Hello Server");
+  } else {
+      // Remmember to check firewall
+      Serial.println("Not Connected!");
+  }
     
-    // run callback when messages are received
-    client.onMessage([&](websockets::WebsocketsMessage message){
-        Serial.print("Got Message: ");
-        Serial.println(message.data());
-    });
+  // run callback when messages are received
+  client.onMessage([&](websockets::WebsocketsMessage message){
+      Serial.print("Got Message: ");
+      Serial.println(message.data());
+  });
 }
 
 void setup() {
@@ -163,7 +183,7 @@ void setup() {
 
   LittleFS.begin(true);
 
-  preferences.begin("wifi", false);
+  preferences.begin("prefs", false);
   String pref_ssid = preferences.getString("ssid", "");
   String pref_pass = preferences.getString("pass", "");
   preferences.end();
@@ -199,7 +219,7 @@ void setup() {
 
         digitalWrite(LAMP_PIN, HIGH);
 
-        preferences.begin("wifi", false);
+        preferences.begin("prefs", false);
         preferences.putString("ssid", "");
         preferences.putString("pass", "");
         preferences.end();
@@ -225,7 +245,9 @@ void setup() {
 
   startAsyncCameraServer();
 
-  // startWebSocketConnection();
+  if (!needs_setup) {
+    startWebSocketConnection();
+  }
 }
 
 void loop() {
