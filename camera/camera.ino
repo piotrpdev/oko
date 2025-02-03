@@ -137,7 +137,7 @@ void startAsyncCameraServer() {
     request->redirect("/setup.html");
 
     if (valid) {
-      Serial.println("Restarting with new Wi-Fi details")
+      Serial.println("Restarting with new Wi-Fi details");
       ESP.restart();
     }
   });
