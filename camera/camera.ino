@@ -55,6 +55,9 @@ static bool needs_setup = true;
 
 static websockets::WebsocketsClient client;
 
+#define CAPTURE_INTERVAL 100
+unsigned long previousMillis = 0;
+
 esp_err_t setupCamera() {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -188,10 +191,35 @@ void startWebSocketConnection() {
     return;
   }
 
-  bool connected = client.connect("ws://" + pref_oko + "/");
+  bool connected = client.connect("ws://" + pref_oko + "/api/ws");
   if (connected) {
       Serial.println("Connected!");
-      client.send("Hello Server");
+      client.send("camera_any_port");
+      sleep(2);
+
+      camera_fb_t *fb = NULL;
+
+      // TODO: Move into loop() ?
+      while (true) {
+        unsigned long currentMillis = millis();
+
+        if (currentMillis - previousMillis >= CAPTURE_INTERVAL) {
+          previousMillis = currentMillis;
+
+          fb = esp_camera_fb_get();
+          if (!fb) {
+            Serial.println("Camera capture failed");
+            continue;
+          }
+
+          // https://github.com/gilmaimon/ArduinoWebsockets/issues/16
+          // TODO: try streaming? e.g. .streamBinary()
+          client.sendBinary((const char *)fb->buf, fb->len);
+
+          esp_camera_fb_return(fb);
+          fb = NULL;
+        }
+      }
   } else {
       // Remmember to check firewall
       Serial.println("Not Connected!");
