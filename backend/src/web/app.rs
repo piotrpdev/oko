@@ -62,6 +62,7 @@ const EXPIRED_SESSION_DELETION_INTERVAL: tokio::time::Duration =
     tokio::time::Duration::from_secs(60);
 const SESSION_DURATION: Duration = Duration::days(1);
 const CAMERA_INDICATOR_TEXT: &str = "camera";
+const CAMERA_ANY_PORT_INDICATOR_TEXT: &str = "camera_any_port";
 const EMPTY_TASK_SLEEP_DURATION: tokio::time::Duration = tokio::time::Duration::from_millis(100);
 
 #[derive(RustEmbed, Clone)]
@@ -278,6 +279,7 @@ async fn handle_socket(
     //  Always ignoring the first message in every task is maybe not the best solution.
 
     let mut is_camera = false;
+    let mut camera_any_port = false;
     let mut camera_id: i64 = -1;
 
     if let Some(msg) = socket.recv().await {
@@ -291,6 +293,11 @@ async fn handle_socket(
                     if msg_txt == CAMERA_INDICATOR_TEXT {
                         info!("{who} is a camera...");
                         is_camera = true;
+                    } else if msg_txt == CAMERA_ANY_PORT_INDICATOR_TEXT {
+                        // TODO: Maybe find a better way to handle this
+                        info!("{who} is a camera (any port)...");
+                        is_camera = true;
+                        camera_any_port = true;
                     } else {
                         info!("{who} is not camera...");
                     }
@@ -308,14 +315,28 @@ async fn handle_socket(
     let mut cameras: Vec<CameraPermissionView> = Vec::new();
 
     if is_camera {
-        let Ok(db_camera) = Camera::get_using_ip(&auth_session.backend.db, who.to_string()).await
-        else {
-            // TODO: Inform client/db if camera not found (both web user and ws connection), also find better way to exit here?
-            error!("Camera not found in DB, aborting...");
-            return;
-        };
+        // TODO: Maybe find a better way to handle this
+        if camera_any_port {
+            let Ok(db_camera) =
+                Camera::get_using_ip(&auth_session.backend.db, who.ip().to_string() + ":*").await
+            else {
+                // TODO: Inform client/db if camera not found (both web user and ws connection), also find better way to exit here?
+                error!("Camera (any port) not found in DB, aborting...");
+                return;
+            };
 
-        camera_id = db_camera.camera_id;
+            camera_id = db_camera.camera_id;
+        } else {
+            let Ok(db_camera) =
+                Camera::get_using_ip(&auth_session.backend.db, who.to_string()).await
+            else {
+                // TODO: Inform client/db if camera not found (both web user and ws connection), also find better way to exit here?
+                error!("Camera not found in DB, aborting...");
+                return;
+            };
+
+            camera_id = db_camera.camera_id;
+        }
     } else {
         // TODO: Return errors to user
         let Some(user) = auth_session.user else {
