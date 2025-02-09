@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/piotrpdev/oko/compare/oko-v0.1.4...oko-v0.1.5) - 2025-02-09
+
+### Added
+
+- OKO-103 handle camera on any port
+
 ## [0.1.4](https://github.com/piotrpdev/oko/compare/oko-v0.1.3...oko-v0.1.4) - 2025-01-04
 
 ### Added
