@@ -17,7 +17,6 @@
 // TODO: Display possible networks to connect to
 // TODO: After setup, display success message/tell user to restart
 // TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
-// TODO: Add input validation after trimming e.g. alphanumeric (in arduino lib), length, basic ipv4 validation, allows spaces, etc. https://docs.arduino.cc/built-in-examples/strings/CharacterAnalysis/
 
 // CAMERA_MODEL_AI_THINKER pins
 #define PWDN_GPIO_NUM     32
