@@ -20,7 +20,7 @@ target/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-**/.cargo/config.toml
+backend/.cargo/config.toml
 .vscode/*
 scripts/.venv/*
 *.mp4
@@ -30,4 +30,6 @@ scripts/.venv/*
 tarpaulin-report.html
 
 static/
-rust-toolchain.toml
+backend/rust-toolchain.toml
+
+.embuild

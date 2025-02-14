@@ -55,6 +55,7 @@ Made using the following resources:
 | [ArduinoWebsockets examples][ws-example]  | [GNU GPLv3.0][ws-license]         |
 | [ESPAsyncWebServer examples][espa-example]| [GNU LGPLv3.0][espa-license]      |
 | [Lucide icons][lucide]                    | [ISC][lucide-license]             |
+| [`esp-idf-template` examples][idf-example]| [MIT][idf-license]                |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -95,5 +96,7 @@ video-to-image conversion needs."*][video2image-medium]
 [espa-license]: https://github.com/ESP32Async/ESPAsyncWebServer/blob/main/LICENSE
 [lucide]: https://github.com/lucide-icons/lucide
 [lucide-license]: https://github.com/lucide-icons/lucide/blob/main/LICENSE
+[idf-example]: https://github.com/esp-rs/esp-idf-template
+[idf-license]: https://github.com/esp-rs/esp-idf-template/blob/master/LICENSE-MIT
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->
