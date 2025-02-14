@@ -52,6 +52,7 @@ Made using the following resources:
 | [ESP32-CAM example code][esp32-cam]       | [GNU LGPLv2.1][cam-license]       |
 | [ArduinoWebsockets examples][ws-example]  | [GNU GPLv3.0][ws-license]         |
 | [ESPAsyncWebServer examples][espa-example]| [GNU LGPLv3.0][espa-license]      |
+| [Lucide icons][lucide]                    | [ISC][lucide-license]             |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -90,5 +91,7 @@ video-to-image conversion needs."*][video2image-medium]
 [ws-license]: https://github.com/gilmaimon/ArduinoWebsockets/blob/master/LICENSE
 [espa-example]: https://github.com/ESP32Async/ESPAsyncWebServer/tree/main/examples
 [espa-license]: https://github.com/ESP32Async/ESPAsyncWebServer/blob/main/LICENSE
+[lucide]: https://github.com/lucide-icons/lucide
+[lucide-license]: https://github.com/lucide-icons/lucide/blob/main/LICENSE
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->

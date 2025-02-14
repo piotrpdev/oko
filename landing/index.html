@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="icon" href="assets/favicon.svg">
+
+    <title>Oko</title>
+    <meta name="description" content="fully local home security system" />
+
+    <style>
+        @font-face {
+            font-family: Geist;
+            src: url('assets/geist.woff2') format('woff2');
+            font-style: normal;
+            font-weight: 100 900;
+        }
+
+        :root {
+            --background-color: #09090b;
+            --text-color: white;
+            --muted-text-color: hsl(0, 0%, 61%);
+            --border-color: hsl(0, 0%, 15%);
+        }
+
+        body {
+            font-family: Geist, serif;
+            font-optical-sizing: auto;
+            font-feature-settings: normal;
+            font-variation-settings: normal;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+
+            background-color: var(--background-color);
+            color: var(--text-color);
+
+            padding: 0;
+            margin: 0;
+
+            box-sizing: border-box;
+            height: 100vh;
+        }
+
+        #container {
+            display: flex;
+
+            box-sizing: border-box;
+            height: 100%;
+        }
+
+        #text-col {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        #inner-text-col {
+            max-width: 20rem;
+        }
+
+        ul {
+            padding: 0rem;
+        }
+
+        li {
+            margin: 1.5rem 0;
+            font-weight: 200;
+        }
+
+        li b {
+            font-weight: 600;
+        }
+
+        #img-col {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .img-center {
+            justify-content: center !important;
+        }
+
+        @keyframes fade {
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        #img-col img {
+            max-height: 90vh;
+            max-width: 90vw;
+
+            box-shadow: 0 5px 30px 0 rgba(255, 255, 255, 0.15);
+
+            animation-name: fade;
+            animation-timing-function: linear;
+            animation-duration: 0.3s;
+        }
+
+        #demo-img {
+            border-radius: 5px;
+            border: solid 1px var(--border-color);
+            width: 100%;
+        }
+
+        #poster-img {
+            width: auto;
+        }
+
+        header {
+            margin-bottom: 3rem;
+        }
+
+        #title {
+            margin: 0;
+            display: flex;
+            flex-direction: row;
+            align-items: baseline;
+        }
+
+        h1 {
+            margin: 0;
+            transform: translateX(-0.22rem);
+        }
+
+        h5 {
+            margin: 0 0.2rem;
+            font-style: italic;
+            color: var(--muted-text-color);
+            transform: translateY(-0.08rem);
+        }
+
+        #subtitle {
+            transform: translateX(-0.1rem);
+            margin: 0 0 1.5rem 0;
+            color: var(--muted-text-color);
+        }
+
+        #btn-container {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        a {
+            cursor: pointer;
+            text-decoration: none;
+            color: var(--muted-text-color);
+        }
+
+        a:hover {
+            color: var(--text-color);
+        }
+
+        .selected {
+            font-weight: bold;
+            color: var(--text-color);
+        }
+
+        @media (width > 0px) {
+            #container {
+                padding: 5% 5%;
+                flex-direction: column-reverse;
+                align-items: center;
+                justify-content: start;
+            }
+
+            #img-col {
+                margin-bottom: 7%;
+            }
+
+            h5 {
+                font-weight: 200;
+            }
+        }
+
+        @media (width > 1024px) {
+            #container {
+                padding: 0 5%;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #text-col {
+                flex: 0 0 40%;
+            }
+
+            #img-col {
+                flex: 0 0 60%;
+                margin-bottom: 0;
+            }
+
+            h5 {
+                font-weight: normal;
+            }
+        }
+
+        @media (width > 1440px) {
+            #container {
+                padding: 0 7%;
+            }
+
+            #text-col {
+                flex: 0 0 33%;
+            }
+
+            #img-col {
+                flex: 0 0 66%;
+            }
+        }
+
+        @media (width > 1920px) {
+            #container {
+                padding: 0 10%;
+            }
+
+            #text-col {
+                flex: 0 0 33%;
+            }
+
+            #img-col {
+                flex: 0 0 66%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="text-col">
+            <div id="inner-text-col">
+                <div id="title">
+                    <h1>Oko</h1>
+                    <h5>("eye" in Polish)</h5>
+                </div>
+                <p id="subtitle">fully local home security system</p>
+                <header id="btn-container">
+                    <a id="about-btn" class="selected" role="button" tabindex="0">About</a>
+                    <a id="poster-btn" role="button" tabindex="0">Poster</a>
+                    <a target="_blank" href="https://www.youtube.com/watch?v=Ijt94tO9f5o">Demo</a>
+                    <a target="_blank" href="https://github.com/piotrpdev/oko">GitHub</a>
+                </header>
+                <ul>
+                    <li>Provides <b>fully open-source software</b> for commonly available cameras.</li>
+                    <li>Provides a <b>simple dashboard</b> to view and control several of these cameras at once.</li>
+                    <li>Stores camera data <b>locally</b> and makes it accessible through the dashboard.</li>
+                    <li>Runs on <b>cheap</b> resource-limited devices.</li>
+                </ul>
+            </div>
+        </div>
+        <div id="img-col">
+            <!-- TODO: Replace placeholder images -->
+            <img id="demo-img" src="assets/demo_placeholder.webp" alt="Oko demo">
+            <img id="poster-img" src="assets/poster_placeholder.webp" alt="Oko poster" style="display: none;">
+        </div>
+    </div>
+    <script>
+        "use strict";
+
+        const imgCol = document.getElementById("img-col");
+        const aboutBtn = document.getElementById("about-btn");
+        const posterBtn = document.getElementById("poster-btn");
+        const demoImg = document.getElementById("demo-img");
+        const posterImg = document.getElementById("poster-img");
+
+        aboutBtn.addEventListener("click", () => {
+            aboutBtn.classList.add("selected");
+            posterBtn.classList.remove("selected");
+            imgCol.classList.remove("img-center");
+            demoImg.style.display = "block";
+            posterImg.style.display = "none";
+        });
+
+        posterBtn.addEventListener("click", () => {
+            posterBtn.classList.add("selected");
+            aboutBtn.classList.remove("selected");
+            imgCol.classList.add("img-center");
+            demoImg.style.display = "none";
+            posterImg.style.display = "block";
+        });
+    </script>
+</body>
+</html>
