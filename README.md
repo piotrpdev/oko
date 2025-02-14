@@ -4,6 +4,8 @@
 } -->
 <div align="center">
 
+<!-- TODO: Nicer README e.g. image, features, flow diagram, project structure -->
+
 # Oko
 
 Fully local home security system
