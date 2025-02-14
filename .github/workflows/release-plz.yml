@@ -11,8 +11,8 @@ on:
       - main
     paths:
       - 'backend/**'
-      - 'frontend/**'
       - '.github/workflows/release-plz.yml'
+      # - 'frontend/**' # No point, release-plz only creates new release when Rust code changes.
 
 jobs:
   # Release unpublished packages.
