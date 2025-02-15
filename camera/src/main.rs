@@ -1,9 +1,19 @@
 use std::{net::Ipv4Addr, str::FromStr, thread::JoinHandle};
 
 use esp_idf_svc::{
-    eventloop::EspSystemEventLoop, hal::{
-        modem::Modem, prelude::Peripherals, task::{self, block_on}
-    }, http::{server::EspHttpServer, Method}, io::Write, ipv4, netif::{EspNetif, NetifConfiguration, NetifStack}, nvs::EspDefaultNvsPartition, timer::EspTaskTimerService, wifi::{AccessPointConfiguration, AsyncWifi, Configuration, EspWifi, WifiDriver}
+    eventloop::EspSystemEventLoop,
+    hal::{
+        modem::Modem,
+        prelude::Peripherals,
+        task::{self, block_on},
+    },
+    http::{server::EspHttpServer, Method},
+    io::Write,
+    ipv4,
+    netif::{EspNetif, NetifConfiguration, NetifStack},
+    nvs::EspDefaultNvsPartition,
+    timer::EspTaskTimerService,
+    wifi::{AccessPointConfiguration, AsyncWifi, Configuration, EspWifi, WifiDriver},
 };
 use log::info;
 
@@ -14,6 +24,7 @@ const AP_SETUP_HTML: &str = include_str!("setup.html");
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
+    let _mounted_eventfs = esp_idf_svc::io::vfs::MountedEventfs::mount(5)?;
 
     info!("Staring Oko camera...");
 
@@ -31,16 +42,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _http_server = start_http_server()?;
         let _captive_portal_dns = start_dns_captive_portal()?;
 
-        wifi.wifi_wait(|_| Ok(true), None)
-            .await?;
-        
+        wifi.wifi_wait(|_| Ok(true), None).await?;
+
         Ok::<(), Box<dyn std::error::Error>>(())
     })?;
 
     Ok(())
 }
 
-fn configure_ap(modem: Modem, sys_loop: EspSystemEventLoop) -> Result<EspWifi<'static>, Box<dyn std::error::Error>> {
+fn configure_ap(
+    modem: Modem,
+    sys_loop: EspSystemEventLoop,
+) -> Result<EspWifi<'static>, Box<dyn std::error::Error>> {
     let nvs = EspDefaultNvsPartition::take()?;
     let wifi = WifiDriver::new(modem, sys_loop, Some(nvs))?;
 
@@ -99,29 +112,29 @@ fn start_http_server() -> Result<EspHttpServer<'static>, Box<dyn std::error::Err
 
     http_server
         .fn_handler("/", Method::Get, |request| {
-            request.into_ok_response()?.write_all(AP_SETUP_HTML.as_bytes())
+            request
+                .into_ok_response()?
+                .write_all(AP_SETUP_HTML.as_bytes())
         })?
         .fn_handler("/generate_204", Method::Get, |request| {
-            request.into_ok_response()?.write_all(AP_SETUP_HTML.as_bytes())
+            request
+                .into_ok_response()?
+                .write_all(AP_SETUP_HTML.as_bytes())
         })?
         .fn_handler("/gen_204", Method::Get, |request| {
-            request.into_ok_response()?.write_all(AP_SETUP_HTML.as_bytes())
+            request
+                .into_ok_response()?
+                .write_all(AP_SETUP_HTML.as_bytes())
         })?;
 
     Ok(http_server)
 }
 
 fn start_dns_captive_portal() -> Result<CaptivePortalDns, Box<dyn std::error::Error>> {
-    const STACK_SIZE: usize = 16 * 1024;
-    task::thread::ThreadSpawnConfiguration {
-        stack_size: 16 * 1024,
-        priority: 5,
-        ..Default::default()
-    }
-    .set()?;
+    // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
+    task::thread::ThreadSpawnConfiguration::default().set()?;
     let thread_handle = std::thread::Builder::new()
         .name("dns_server".to_string())
-        .stack_size(STACK_SIZE)
         .spawn(dns_server_task)?;
     let captive_portal_dns = CaptivePortalDns {
         thread_handle: Some(thread_handle),
@@ -143,29 +156,22 @@ impl Drop for CaptivePortalDns {
 }
 
 fn dns_server_task() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let gateway_addr = Ipv4Addr::from_str(GATEWAY_IP)?;
-    let ttl = core::time::Duration::from_secs(300);
-    let addr = core::net::SocketAddr::new(core::net::Ipv4Addr::UNSPECIFIED.into(), 53);
-    let udp_socket = std::net::UdpSocket::bind(addr)?;
-    log::info!("DNS server listening on {addr}...");
-    let mut tx_buf = [0u8; 512];
-    let mut rx_buf = [0u8; 512];
-    loop {
-        let (len, src) = udp_socket.recv_from(&mut rx_buf)?;
-        let request = &mut rx_buf.get_mut(..len).ok_or("Invalid DNS request")?;
-        log::debug!("Received DNS request from {src}...");
-        let len = match edge_captive::reply(request, &gateway_addr.octets(), ttl, &mut tx_buf) {
-            Ok(len) => len,
-            Err(e) => match e {
-                edge_captive::DnsError::InvalidMessage => {
-                    log::warn!("Got invalid DNS message from {src}, skipping...");
-                    continue;
-                }
-                other @ edge_captive::DnsError::ShortBuf => Err(format!("DNSError: {other}")),
-            }?,
-        };
+    block_on(async {
+        let stack = edge_nal_std::Stack::new();
+        let mut tx_buf = [0; 1500];
+        let mut rx_buf = [0; 1500];
 
-        udp_socket.send_to(tx_buf.get_mut(..len).ok_or("Invalid DNS response")?, src)?;
-        log::debug!("Sent DNS response to {src}");
-    }
+        edge_captive::io::run(
+            &stack,
+            core::net::SocketAddr::new(core::net::Ipv4Addr::UNSPECIFIED.into(), 53),
+            &mut tx_buf,
+            &mut rx_buf,
+            Ipv4Addr::from_str(GATEWAY_IP)?,
+            core::time::Duration::from_secs(300),
+        )
+        .await
+        .map_err(|_| "Failed to block on edge_captive")?;
+
+        Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+    })
 }
