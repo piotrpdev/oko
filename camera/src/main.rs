@@ -1,4 +1,4 @@
-use std::{net::Ipv4Addr, str::FromStr, thread::JoinHandle};
+use std::thread::JoinHandle;
 
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
@@ -17,14 +17,21 @@ use esp_idf_svc::{
 };
 use log::info;
 
-const GATEWAY_IP: &str = "192.168.1.1";
+const VFS_MAX_FDS: usize = 5;
 
+const AP_SSID: &str = "ESP32-CAM";
+const AP_GATEWAY_IP: std::net::Ipv4Addr = core::net::Ipv4Addr::new(192, 168, 1, 1);
+const AP_WIFI_CHANNEL: u8 = 11;
+const AP_CAPTIVE_PORTAL_DNS_IP: std::net::Ipv4Addr = core::net::Ipv4Addr::UNSPECIFIED;
+const AP_CAPTIVE_PORTAL_DNS_PORT: u16 = 53;
+const AP_CAPTIVE_PORTAL_BUF_SIZE: usize = 1500;
+const AP_CAPTIVE_PORTAL_DNS_TTL: std::time::Duration = core::time::Duration::from_secs(300);
 const AP_SETUP_HTML: &str = include_str!("setup.html");
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
-    let _mounted_eventfs = esp_idf_svc::io::vfs::MountedEventfs::mount(5)?;
+    let _mounted_eventfs = esp_idf_svc::io::vfs::MountedEventfs::mount(VFS_MAX_FDS)?;
 
     info!("Staring Oko camera...");
 
@@ -42,6 +49,7 @@ fn main() -> anyhow::Result<()> {
         let _http_server = start_http_server()?;
         let _captive_portal_dns = start_dns_captive_portal()?;
 
+        // TODO: Wait for a signal, e.g. lost connection, instead of infinitely
         wifi.wifi_wait(|_| Ok(true), None).await?;
 
         anyhow::Ok(())
@@ -55,9 +63,6 @@ fn configure_ap(modem: Modem, sys_loop: EspSystemEventLoop) -> anyhow::Result<Es
     let wifi = WifiDriver::new(modem, sys_loop, Some(nvs))?;
 
     log::info!("Configuring Wifi AP..");
-    let netmask = 24;
-    let gateway_addr = Ipv4Addr::from_str(GATEWAY_IP)?;
-    let wifi_channel = 11;
 
     let mut wifi = EspWifi::wrap_all(
         wifi,
@@ -65,23 +70,27 @@ fn configure_ap(modem: Modem, sys_loop: EspSystemEventLoop) -> anyhow::Result<Es
         EspNetif::new_with_conf(&NetifConfiguration {
             ip_configuration: Some(ipv4::Configuration::Router(ipv4::RouterConfiguration {
                 subnet: ipv4::Subnet {
-                    gateway: gateway_addr,
-                    mask: ipv4::Mask(netmask),
+                    gateway: AP_GATEWAY_IP,
+                    ..ipv4::RouterConfiguration::default().subnet
                 },
-                dhcp_enabled: true,
-                dns: Some(gateway_addr),
+                dns: Some(AP_GATEWAY_IP),
                 secondary_dns: None,
+                ..Default::default()
             })),
             ..NetifConfiguration::wifi_default_router()
         })?,
     )?;
 
     let wifi_configuration = Configuration::AccessPoint(AccessPointConfiguration {
-        channel: wifi_channel,
+        ssid: AP_SSID
+            .try_into()
+            .map_err(|()| anyhow::anyhow!("Failed to convert AP_SSID into heapless string"))?,
+        channel: AP_WIFI_CHANNEL,
         max_connections: 10,
         ..Default::default()
     });
     wifi.set_configuration(&wifi_configuration)?;
+
     Ok(wifi)
 }
 
@@ -101,6 +110,7 @@ async fn start_ap(
     info!("Wi-Fi AP IP Info: {:?}", ip_info);
 
     info!("Created Wi-Fi");
+
     Ok(wifi)
 }
 
@@ -130,12 +140,15 @@ fn start_http_server() -> anyhow::Result<EspHttpServer<'static>> {
 fn start_dns_captive_portal() -> anyhow::Result<CaptivePortalDns> {
     // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
     task::thread::ThreadSpawnConfiguration::default().set()?;
+
     let thread_handle = std::thread::Builder::new()
         .name("dns_server".to_string())
         .spawn(dns_server_task)?;
+
     let captive_portal_dns = CaptivePortalDns {
         thread_handle: Some(thread_handle),
     };
+
     Ok(captive_portal_dns)
 }
 
@@ -155,20 +168,20 @@ impl Drop for CaptivePortalDns {
 fn dns_server_task() -> anyhow::Result<()> {
     block_on(async {
         let stack = edge_nal_std::Stack::new();
-        let mut tx_buf = [0; 1500];
-        let mut rx_buf = [0; 1500];
+        let mut tx_buf = [0; AP_CAPTIVE_PORTAL_BUF_SIZE];
+        let mut rx_buf = [0; AP_CAPTIVE_PORTAL_BUF_SIZE];
 
         edge_captive::io::run(
             &stack,
-            core::net::SocketAddr::new(core::net::Ipv4Addr::UNSPECIFIED.into(), 53),
+            core::net::SocketAddr::new(AP_CAPTIVE_PORTAL_DNS_IP.into(), AP_CAPTIVE_PORTAL_DNS_PORT),
             &mut tx_buf,
             &mut rx_buf,
-            Ipv4Addr::from_str(GATEWAY_IP)?,
-            core::time::Duration::from_secs(300),
+            AP_GATEWAY_IP,
+            AP_CAPTIVE_PORTAL_DNS_TTL,
         )
         .await
         .map_err(|e| anyhow::anyhow!(e))?;
 
-        anyhow::Ok(())
+        Ok(())
     })
 }
