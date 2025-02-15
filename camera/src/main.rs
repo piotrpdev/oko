@@ -21,7 +21,7 @@ const GATEWAY_IP: &str = "192.168.1.1";
 
 const AP_SETUP_HTML: &str = include_str!("setup.html");
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
     let _mounted_eventfs = esp_idf_svc::io::vfs::MountedEventfs::mount(5)?;
@@ -44,16 +44,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         wifi.wifi_wait(|_| Ok(true), None).await?;
 
-        Ok::<(), Box<dyn std::error::Error>>(())
+        anyhow::Ok(())
     })?;
 
     Ok(())
 }
 
-fn configure_ap(
-    modem: Modem,
-    sys_loop: EspSystemEventLoop,
-) -> Result<EspWifi<'static>, Box<dyn std::error::Error>> {
+fn configure_ap(modem: Modem, sys_loop: EspSystemEventLoop) -> anyhow::Result<EspWifi<'static>> {
     let nvs = EspDefaultNvsPartition::take()?;
     let wifi = WifiDriver::new(modem, sys_loop, Some(nvs))?;
 
@@ -91,7 +88,7 @@ fn configure_ap(
 async fn start_ap(
     ap: EspWifi<'static>,
     sys_loop: &EspSystemEventLoop,
-) -> Result<AsyncWifi<EspWifi<'static>>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
     let timer_service = EspTaskTimerService::new()?;
     let mut wifi = AsyncWifi::wrap(ap, sys_loop.clone(), timer_service)?;
     wifi.start().await?;
@@ -107,7 +104,7 @@ async fn start_ap(
     Ok(wifi)
 }
 
-fn start_http_server() -> Result<EspHttpServer<'static>, Box<dyn std::error::Error>> {
+fn start_http_server() -> anyhow::Result<EspHttpServer<'static>> {
     let mut http_server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration::default())?;
 
     http_server
@@ -130,7 +127,7 @@ fn start_http_server() -> Result<EspHttpServer<'static>, Box<dyn std::error::Err
     Ok(http_server)
 }
 
-fn start_dns_captive_portal() -> Result<CaptivePortalDns, Box<dyn std::error::Error>> {
+fn start_dns_captive_portal() -> anyhow::Result<CaptivePortalDns> {
     // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
     task::thread::ThreadSpawnConfiguration::default().set()?;
     let thread_handle = std::thread::Builder::new()
@@ -143,7 +140,7 @@ fn start_dns_captive_portal() -> Result<CaptivePortalDns, Box<dyn std::error::Er
 }
 
 pub struct CaptivePortalDns {
-    thread_handle: Option<JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>>,
+    thread_handle: Option<JoinHandle<anyhow::Result<()>>>,
 }
 
 impl Drop for CaptivePortalDns {
@@ -155,7 +152,7 @@ impl Drop for CaptivePortalDns {
     }
 }
 
-fn dns_server_task() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn dns_server_task() -> anyhow::Result<()> {
     block_on(async {
         let stack = edge_nal_std::Stack::new();
         let mut tx_buf = [0; 1500];
@@ -170,8 +167,8 @@ fn dns_server_task() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             core::time::Duration::from_secs(300),
         )
         .await
-        .map_err(|_| "Failed to block on edge_captive")?;
+        .map_err(|e| anyhow::anyhow!(e))?;
 
-        Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+        anyhow::Ok(())
     })
 }

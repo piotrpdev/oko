@@ -27,6 +27,7 @@ log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 edge-captive = "0.5.0"
 edge-nal-std = "0.5.0"
+anyhow = "1.0.95"
 
 [build-dependencies]
 embuild = "0.33"
