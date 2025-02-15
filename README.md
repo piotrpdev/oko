@@ -59,6 +59,7 @@ Made using the following resources:
 | [`esp-rs/std-training`][esp-std]          | [MIT][esp-std-license]            |
 | [`esp-idf-svc` examples][idf-svc-example] | [MIT][idf-svc-license]            |
 | [`edge-net` examples][edge-net-example]   | [MIT][edge-net-license]           |
+| [gatekeeper source code][gatekeeper]      | [Unlicense][gatekeeper-license]   |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -107,5 +108,7 @@ video-to-image conversion needs."*][video2image-medium]
 [idf-svc-license]: https://github.com/esp-rs/esp-idf-svc/blob/master/LICENSE-MIT
 [edge-net-example]: https://github.com/ivmarkov/edge-net/tree/master/examples
 [edge-net-license]: https://github.com/ivmarkov/edge-net/blob/master/LICENSE-MIT
+[gatekeeper]: https://github.com/shekohex/gatekeeper
+[gatekeeper-license]: https://github.com/shekohex/gatekeeper/blob/main/LICENSE
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->
