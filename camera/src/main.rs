@@ -1,5 +1,7 @@
 use std::thread::JoinHandle;
 
+use anyhow::{bail, Context};
+use embedded_svc::http::Headers;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     hal::{
@@ -8,7 +10,7 @@ use esp_idf_svc::{
         task::{self, block_on},
     },
     http::{server::EspHttpServer, Method},
-    io::Write,
+    io::{Read, Write},
     ipv4,
     netif::{EspNetif, NetifConfiguration, NetifStack},
     nvs::EspDefaultNvsPartition,
@@ -16,6 +18,12 @@ use esp_idf_svc::{
     wifi::{AccessPointConfiguration, AsyncWifi, Configuration, EspWifi, WifiDriver},
 };
 use log::info;
+use serde::Deserialize;
+
+// TODO: Display possible networks to connect to
+// TODO: Improve error handling
+// TODO: Add more logging everywhere
+// TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
 
 const VFS_MAX_FDS: usize = 5;
 
@@ -27,6 +35,14 @@ const AP_CAPTIVE_PORTAL_DNS_PORT: u16 = 53;
 const AP_CAPTIVE_PORTAL_BUF_SIZE: usize = 1500;
 const AP_CAPTIVE_PORTAL_DNS_TTL: std::time::Duration = core::time::Duration::from_secs(300);
 const AP_SETUP_HTML: &str = include_str!("setup.html");
+const AP_MAX_PAYLOAD_LEN: u64 = 256;
+
+#[derive(Deserialize)]
+struct FormData {
+    ssid: String,
+    pass: String,
+    oko: String,
+}
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -118,23 +134,120 @@ fn start_http_server() -> anyhow::Result<EspHttpServer<'static>> {
     let mut http_server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration::default())?;
 
     http_server
-        .fn_handler("/", Method::Get, |request| {
+        .fn_handler("/setup.html", Method::Get, |request| {
             request
                 .into_ok_response()?
                 .write_all(AP_SETUP_HTML.as_bytes())
         })?
         .fn_handler("/generate_204", Method::Get, |request| {
+            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
             request
-                .into_ok_response()?
-                .write_all(AP_SETUP_HTML.as_bytes())
+                .into_response(301, None, &[("Location", &location)])?
+                .flush()
         })?
         .fn_handler("/gen_204", Method::Get, |request| {
+            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
             request
-                .into_ok_response()?
-                .write_all(AP_SETUP_HTML.as_bytes())
+                .into_response(301, None, &[("Location", &location)])?
+                .flush()
+        })?
+        .fn_handler::<anyhow::Error, _>("/setup.html", Method::Post, |mut req| {
+            let len = req.content_len().unwrap_or(0);
+
+            if len > AP_MAX_PAYLOAD_LEN || len == 0 {
+                info!("Bad setup payload size: {}", len);
+                req.into_status_response(413)?.flush()?;
+                return Ok(());
+            }
+
+            let mut buf = vec![0; len.try_into()?];
+            req.read_exact(&mut buf)?;
+
+            info!(
+                "Received setup form data (length: {}): {:?}",
+                len,
+                String::from_utf8(buf.clone())?
+            );
+            // TODO: Handle empty/missing values
+            let form = serde_urlencoded::from_bytes::<FormData>(&buf)?;
+            info!(
+                "Setup form details: SSID: {}, Pass: {}, Oko: {}",
+                form.ssid, form.pass, form.oko
+            );
+            validate_form_data(&form)?;
+            info!("Form is valid");
+
+            let location = format!("http://{AP_GATEWAY_IP}/setup.html#success");
+            req.into_response(301, None, &[("Location", &location)])?
+                .flush()?;
+
+            Ok(())
         })?;
 
     Ok(http_server)
+}
+
+fn validate_form_data(form: &FormData) -> anyhow::Result<()> {
+    // ? Maybe use <String>.chars().count() instead of .len()
+    // https://paginas.fe.up.pt/~jaime/0506/SSR/802.11i-2004.pdf
+
+    // SSID is basically arbitrary data, spec says pretty much anything is allowed (hopefully no exploit here)
+    let ssid_param = form.ssid.trim().to_string();
+    if !(1..=32).contains(&ssid_param.len()) {
+        bail!("SSID length is invalid");
+    }
+
+    let pass_param = form.pass.trim().to_string();
+    if !(8..=63).contains(&pass_param.len()) {
+        bail!("Password length is invalid");
+    }
+
+    // Oko IP e.g. 192.168.0.28:8080
+    // TODO: Switch to Regex, assuming it can run reliably on ESP32
+    // X.X.X.X:X -> XXX.XXX.XXX.XXX:XXXXX
+    let oko_param = form.oko.trim().to_string();
+    if !oko_param
+        .chars()
+        .all(|c| c.is_ascii() && !c.is_whitespace())
+    {
+        bail!("Oko param contains non-ascii or whitespace characters");
+    }
+
+    if !(9..=21).contains(&oko_param.len()) {
+        bail!("Oko param length is invalid");
+    }
+
+    let oko_parts: Vec<&str> = oko_param.split(':').collect();
+    if oko_parts.len() != 2 {
+        bail!("Splitting by colon didn't result in two parts");
+    }
+
+    let ip_parts: Vec<&str> = oko_parts
+        .first()
+        .context("Failed to get characters left of colon")?
+        .split('.')
+        .collect();
+    if ip_parts.len() != 4 {
+        bail!("Splitting by dot didn't result in four parts");
+    }
+
+    for part in ip_parts {
+        let part: u8 = part.parse().context("Failed to parse IP part")?;
+        if !(0..=255).contains(&part) {
+            bail!("IP part is out of valid range");
+        }
+    }
+
+    let port: u16 = oko_parts
+        .get(1)
+        .context("Failed to get characters right of colon")?
+        .parse()
+        .context("Failed to parse port")?;
+    if !(1..=65535).contains(&port) {
+        bail!("Port is out of valid range");
+    }
+
+    Ok(())
 }
 
 fn start_dns_captive_portal() -> anyhow::Result<CaptivePortalDns> {

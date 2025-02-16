@@ -166,9 +166,12 @@ dependencies = [
  "anyhow",
  "edge-captive",
  "edge-nal-std",
+ "embedded-svc",
  "embuild",
  "esp-idf-svc",
  "log",
+ "serde",
+ "serde_urlencoded",
 ]
 
 [[package]]
@@ -625,9 +628,11 @@ dependencies = [
  "embedded-io-async",
  "enumset",
  "heapless",
+ "log",
  "num_enum",
  "serde",
  "strum 0.25.0",
+ "strum_macros 0.25.3",
 ]
 
 [[package]]
@@ -662,6 +667,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d07a4b049558765cef5f0c1a273c3fc57084d768b44d2f98127aef4cceb17293"
 dependencies = [
  "enumset_derive",
+ "serde",
 ]
 
 [[package]]
@@ -813,6 +819,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "form_urlencoded"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
+dependencies = [
+ "percent-encoding",
+]
+
+[[package]]
 name = "fs_at"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -939,6 +954,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
  "hash32",
+ "serde",
  "stable_deref_trait",
 ]
 
@@ -1204,6 +1220,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
 
 [[package]]
+name = "percent-encoding"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1424,6 +1446,18 @@ checksum = "d434192e7da787e94a6ea7e9670b26a036d0ca41e0b7efb2676dd32bae872949"
 dependencies = [
  "itoa",
  "memchr",
+ "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_urlencoded"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
+dependencies = [
+ "form_urlencoded",
+ "itoa",
  "ryu",
  "serde",
 ]
