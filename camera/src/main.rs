@@ -13,7 +13,7 @@ use esp_idf_svc::{
     io::{Read, Write},
     ipv4,
     netif::{EspNetif, NetifConfiguration, NetifStack},
-    nvs::EspDefaultNvsPartition,
+    nvs::{EspDefaultNvsPartition, EspNvs, EspNvsPartition, NvsDefault},
     timer::EspTaskTimerService,
     wifi::{AccessPointConfiguration, AsyncWifi, Configuration, EspWifi, WifiDriver},
 };
@@ -24,6 +24,13 @@ use serde::Deserialize;
 // TODO: Improve error handling
 // TODO: Add more logging everywhere
 // TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
+// TODO: Make messages/strings consistent
+
+const PREFERENCES_MAX_STR_LEN: usize = 100;
+const PREFERENCES_NAMESPACE: &str = "preferences";
+const PREFERENCES_KEY_SSID: &str = "ssid";
+const PREFERENCES_KEY_PASS: &str = "pass";
+const PREFERENCES_KEY_OKO: &str = "oko";
 
 const VFS_MAX_FDS: usize = 5;
 
@@ -37,7 +44,7 @@ const AP_CAPTIVE_PORTAL_DNS_TTL: std::time::Duration = core::time::Duration::fro
 const AP_SETUP_HTML: &str = include_str!("setup.html");
 const AP_MAX_PAYLOAD_LEN: u64 = 256;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct FormData {
     ssid: String,
     pass: String,
@@ -53,17 +60,49 @@ fn main() -> anyhow::Result<()> {
 
     let peripherals = Peripherals::take()?;
     let sys_loop = EspSystemEventLoop::take()?;
-    let ap = configure_ap(peripherals.modem, sys_loop.clone())?;
+    let nvs_default_partition = EspDefaultNvsPartition::take()?;
+
+    let setup_details = get_setup_details(&nvs_default_partition)?;
+    let is_setup_details_empty = setup_details.ssid.is_empty()
+        || setup_details.pass.is_empty()
+        || setup_details.oko.is_empty();
 
     block_on(async move {
-        let mut wifi = start_ap(ap, &sys_loop).await?;
+        let mut wifi;
+        let _captive_portal_dns;
 
-        let ip_info = wifi.wifi().ap_netif().get_ip_info()?;
+        let mut esp_wifi = create_esp_wifi(
+            peripherals.modem,
+            sys_loop.clone(),
+            nvs_default_partition.clone(),
+        )?;
 
-        log::info!("Wifi AP Interface info: {:?}", ip_info);
+        // ! Switching from AP to STA seems to keep AP DNS details, even after restart. IP and Gateway seem to update fine.
+        if is_setup_details_empty {
+            info!("No setup details found, starting AP");
 
-        let _http_server = start_http_server()?;
-        let _captive_portal_dns = start_dns_captive_portal()?;
+            wifi = start_ap(esp_wifi, &sys_loop).await?;
+
+            _captive_portal_dns = start_dns_captive_portal()?;
+        } else {
+            info!("Setup details found, connecting to network");
+
+            esp_wifi.set_configuration(&Configuration::Client(
+                esp_idf_svc::wifi::ClientConfiguration {
+                    ssid: (&setup_details.ssid.clone()[..]).try_into().map_err(|()| {
+                        anyhow::anyhow!("Could not parse the given SSID into WiFi config")
+                    })?,
+                    password: (&setup_details.pass.clone()[..]).try_into().map_err(|()| {
+                        anyhow::anyhow!("Could not parse the given password into WiFi config")
+                    })?,
+                    ..Default::default()
+                },
+            ))?;
+
+            wifi = start_sta(esp_wifi, &sys_loop).await?;
+        }
+
+        let _http_server = start_http_server(nvs_default_partition)?;
 
         // TODO: Wait for a signal, e.g. lost connection, instead of infinitely
         wifi.wifi_wait(|_| Ok(true), None).await?;
@@ -74,14 +113,13 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn configure_ap(modem: Modem, sys_loop: EspSystemEventLoop) -> anyhow::Result<EspWifi<'static>> {
-    let nvs = EspDefaultNvsPartition::take()?;
-    let wifi = WifiDriver::new(modem, sys_loop, Some(nvs))?;
-
-    log::info!("Configuring Wifi AP..");
-
-    let mut wifi = EspWifi::wrap_all(
-        wifi,
+fn create_esp_wifi(
+    modem: Modem,
+    sys_loop: EspSystemEventLoop,
+    nvs_default_partition: EspNvsPartition<NvsDefault>,
+) -> anyhow::Result<EspWifi<'static>> {
+    let mut esp_wifi = EspWifi::wrap_all(
+        WifiDriver::new(modem, sys_loop, Some(nvs_default_partition))?,
         EspNetif::new(NetifStack::Sta)?,
         EspNetif::new_with_conf(&NetifConfiguration {
             ip_configuration: Some(ipv4::Configuration::Router(ipv4::RouterConfiguration {
@@ -97,17 +135,16 @@ fn configure_ap(modem: Modem, sys_loop: EspSystemEventLoop) -> anyhow::Result<Es
         })?,
     )?;
 
-    let wifi_configuration = Configuration::AccessPoint(AccessPointConfiguration {
+    esp_wifi.set_configuration(&Configuration::AccessPoint(AccessPointConfiguration {
         ssid: AP_SSID
             .try_into()
             .map_err(|()| anyhow::anyhow!("Failed to convert AP_SSID into heapless string"))?,
         channel: AP_WIFI_CHANNEL,
         max_connections: 10,
         ..Default::default()
-    });
-    wifi.set_configuration(&wifi_configuration)?;
+    }))?;
 
-    Ok(wifi)
+    Ok(esp_wifi)
 }
 
 async fn start_ap(
@@ -117,22 +154,46 @@ async fn start_ap(
     let timer_service = EspTaskTimerService::new()?;
     let mut wifi = AsyncWifi::wrap(ap, sys_loop.clone(), timer_service)?;
     wifi.start().await?;
-    info!("Wifi AP started");
+    info!("Wi-Fi AP started");
 
     wifi.wait_netif_up().await?;
-    info!("Wifi AP netif up");
+    info!("Wi-Fi AP netif up");
 
     let ip_info = wifi.wifi().ap_netif().get_ip_info()?;
     info!("Wi-Fi AP IP Info: {:?}", ip_info);
 
-    info!("Created Wi-Fi");
+    Ok(wifi)
+}
+
+async fn start_sta(
+    sta: EspWifi<'static>,
+    sys_loop: &EspSystemEventLoop,
+) -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
+    let timer_service = EspTaskTimerService::new()?;
+    let mut wifi = AsyncWifi::wrap(sta, sys_loop.clone(), timer_service)?;
+    wifi.start().await?;
+    info!("Wi-Fi started");
+
+    wifi.connect().await?;
+    info!("Wi-Fi connected");
+
+    wifi.wait_netif_up().await?;
+    info!("Wi-Fi netif up");
+
+    let ip_info = wifi.wifi().sta_netif().get_ip_info()?;
+    info!("Wi-Fi STA IP Info: {:?}", ip_info);
 
     Ok(wifi)
 }
 
-fn start_http_server() -> anyhow::Result<EspHttpServer<'static>> {
+fn start_http_server(
+    nvs_default_partition: EspNvsPartition<NvsDefault>,
+) -> anyhow::Result<EspHttpServer<'static>> {
     let mut http_server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration::default())?;
 
+    // TODO: Extract location to a constant
+    // TODO: Handle all possible URLs for captive portal/connection testing
+    // TODO: On fail redirect to error page
     http_server
         .fn_handler("/setup.html", Method::Get, |request| {
             request
@@ -151,11 +212,24 @@ fn start_http_server() -> anyhow::Result<EspHttpServer<'static>> {
                 .into_response(301, None, &[("Location", &location)])?
                 .flush()
         })?
-        .fn_handler::<anyhow::Error, _>("/setup.html", Method::Post, |mut req| {
+        .fn_handler("/connecttest.txt", Method::Get, |request| {
+            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
+            request
+                .into_response(301, None, &[("Location", &location)])?
+                .flush()
+        })?
+        .fn_handler("/redirect", Method::Get, |request| {
+            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
+            request
+                .into_response(301, None, &[("Location", &location)])?
+                .flush()
+        })?
+        .fn_handler::<anyhow::Error, _>("/setup.html", Method::Post, move |mut req| {
+            // Can this be exploited?
             let len = req.content_len().unwrap_or(0);
 
             if len > AP_MAX_PAYLOAD_LEN || len == 0 {
-                info!("Bad setup payload size: {}", len);
+                info!("Bad setup form data payload size: {}", len);
                 req.into_status_response(413)?.flush()?;
                 return Ok(());
             }
@@ -168,20 +242,24 @@ fn start_http_server() -> anyhow::Result<EspHttpServer<'static>> {
                 len,
                 String::from_utf8(buf.clone())?
             );
-            // TODO: Handle empty/missing values
+
             let form = serde_urlencoded::from_bytes::<FormData>(&buf)?;
             info!(
                 "Setup form details: SSID: {}, Pass: {}, Oko: {}",
                 form.ssid, form.pass, form.oko
             );
+
             validate_form_data(&form)?;
             info!("Form is valid");
+
+            save_setup_details(&nvs_default_partition, &form)?;
 
             let location = format!("http://{AP_GATEWAY_IP}/setup.html#success");
             req.into_response(301, None, &[("Location", &location)])?
                 .flush()?;
 
-            Ok(())
+            info!("Restarting device...");
+            esp_idf_svc::hal::reset::restart();
         })?;
 
     Ok(http_server)
@@ -246,6 +324,54 @@ fn validate_form_data(form: &FormData) -> anyhow::Result<()> {
     if !(1..=65535).contains(&port) {
         bail!("Port is out of valid range");
     }
+
+    Ok(())
+}
+
+fn get_setup_details(
+    nvs_default_partition: &EspNvsPartition<NvsDefault>,
+) -> anyhow::Result<FormData> {
+    info!("Getting setup details");
+    let nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
+
+    let mut ssid_buffer: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
+    let mut pass_buffer: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
+    let mut oko_buffer: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
+
+    info!("Getting raw setup detail data");
+    nvs.get_raw(PREFERENCES_KEY_SSID, &mut ssid_buffer)?;
+    nvs.get_raw(PREFERENCES_KEY_PASS, &mut pass_buffer)?;
+    nvs.get_raw(PREFERENCES_KEY_OKO, &mut oko_buffer)?;
+
+    info!("Converting raw setup data to strings");
+    let ssid = std::str::from_utf8(&ssid_buffer)?
+        .trim()
+        .trim_matches(char::from(0));
+    let pass = std::str::from_utf8(&pass_buffer)?
+        .trim()
+        .trim_matches(char::from(0));
+    let oko = std::str::from_utf8(&oko_buffer)?
+        .trim()
+        .trim_matches(char::from(0));
+
+    Ok(FormData {
+        ssid: ssid.to_string(),
+        pass: pass.to_string(),
+        oko: oko.to_string(),
+    })
+}
+
+fn save_setup_details(
+    nvs_default_partition: &EspNvsPartition<NvsDefault>,
+    form: &FormData,
+) -> anyhow::Result<()> {
+    info!("Saving setup details");
+    let mut nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
+
+    info!("Setting raw setup detail data");
+    nvs.set_raw(PREFERENCES_KEY_SSID, form.ssid.trim().as_bytes())?;
+    nvs.set_raw(PREFERENCES_KEY_PASS, form.pass.trim().as_bytes())?;
+    nvs.set_raw(PREFERENCES_KEY_OKO, form.oko.trim().as_bytes())?;
 
     Ok(())
 }
