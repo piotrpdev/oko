@@ -60,6 +60,7 @@ Made using the following resources:
 | [`esp-idf-svc` examples][idf-svc-example] | [MIT][idf-svc-license]            |
 | [`edge-net` examples][edge-net-example]   | [MIT][edge-net-license]           |
 | [gatekeeper source code][gatekeeper]      | [Unlicense][gatekeeper-license]   |
+| [`esp-camera-rs` package fork][cam-rs]    | [MIT][cam-rs-license]             |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -110,5 +111,7 @@ video-to-image conversion needs."*][video2image-medium]
 [edge-net-license]: https://github.com/ivmarkov/edge-net/blob/master/LICENSE-MIT
 [gatekeeper]: https://github.com/shekohex/gatekeeper
 [gatekeeper-license]: https://github.com/shekohex/gatekeeper/blob/main/LICENSE
+[cam-rs]: https://github.com/hnz1102/esp-camera-rs
+[cam-rs-license]: https://github.com/hnz1102/esp-camera-rs/blob/main/LICENSE
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->

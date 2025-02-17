@@ -31,6 +31,7 @@ anyhow = "1.0.95"
 embedded-svc = "0.28.1"
 serde = "1.0.217"
 serde_urlencoded = "0.7.1"
+esp-camera-rs = { path = "./esp-camera-rs" }
 
 [build-dependencies]
 embuild = "0.33"

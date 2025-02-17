@@ -2,6 +2,7 @@ use std::thread::JoinHandle;
 
 use anyhow::{bail, Context};
 use embedded_svc::http::Headers;
+use esp_camera_rs::Camera;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     hal::{
@@ -14,6 +15,7 @@ use esp_idf_svc::{
     ipv4,
     netif::{EspNetif, NetifConfiguration, NetifStack},
     nvs::{EspDefaultNvsPartition, EspNvs, EspNvsPartition, NvsDefault},
+    sys::camera,
     timer::EspTaskTimerService,
     wifi::{AccessPointConfiguration, AsyncWifi, Configuration, EspWifi, WifiDriver},
 };
@@ -70,6 +72,7 @@ fn main() -> anyhow::Result<()> {
     block_on(async move {
         let mut wifi;
         let _captive_portal_dns;
+        let mut camera: Option<Camera<'_>> = None;
 
         let mut esp_wifi = create_esp_wifi(
             peripherals.modem,
@@ -85,8 +88,10 @@ fn main() -> anyhow::Result<()> {
 
             _captive_portal_dns = start_dns_captive_portal()?;
         } else {
-            info!("Setup details found, connecting to network");
+            info!("Setup details found, initializing camera");
+            camera = Some(init_camera(peripherals.pins)?);
 
+            info!("Connecting to network");
             esp_wifi.set_configuration(&Configuration::Client(
                 esp_idf_svc::wifi::ClientConfiguration {
                     ssid: (&setup_details.ssid.clone()[..]).try_into().map_err(|()| {
@@ -102,7 +107,7 @@ fn main() -> anyhow::Result<()> {
             wifi = start_sta(esp_wifi, &sys_loop).await?;
         }
 
-        let _http_server = start_http_server(nvs_default_partition, esp_needs_setup)?;
+        let _http_server = start_http_server(nvs_default_partition, esp_needs_setup, camera)?;
 
         // TODO: Wait for a signal, e.g. lost connection, instead of infinitely
         wifi.wifi_wait(|_| Ok(true), None).await?;
@@ -111,6 +116,35 @@ fn main() -> anyhow::Result<()> {
     })?;
 
     Ok(())
+}
+
+fn init_camera(
+    pins: esp_idf_svc::hal::gpio::Pins,
+) -> anyhow::Result<esp_camera_rs::Camera<'static>> {
+    let camera = Camera::new(
+        pins.gpio32,
+        pins.gpio0,
+        pins.gpio26,
+        pins.gpio27,
+        pins.gpio5,
+        pins.gpio18,
+        pins.gpio19,
+        pins.gpio21,
+        pins.gpio36,
+        pins.gpio39,
+        pins.gpio34,
+        pins.gpio35,
+        pins.gpio25,
+        pins.gpio23,
+        pins.gpio22,
+        8 * 1_000_000,
+        12,
+        2,
+        camera::camera_grab_mode_t_CAMERA_GRAB_LATEST,
+        camera::framesize_t_FRAMESIZE_SVGA,
+    )?;
+
+    Ok(camera)
 }
 
 fn create_esp_wifi(
@@ -186,9 +220,11 @@ async fn start_sta(
     Ok(wifi)
 }
 
+// ? Maybe split into two different functions for setup/no-setup
 fn start_http_server(
     nvs_default_partition: EspNvsPartition<NvsDefault>,
     esp_needs_setup: bool,
+    camera: Option<Camera<'static>>,
 ) -> anyhow::Result<EspHttpServer<'static>> {
     let mut http_server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration {
         uri_match_wildcard: true,
@@ -220,13 +256,31 @@ fn start_http_server(
         add_setup_form_handler(&mut http_server, nvs_default_partition, true)?;
     } else {
         info!("Adding HTTP handlers");
+        let camera_value = camera.context("No camera in HTTP server")?;
 
         // TODO: Add 404 handler/redirect
-        http_server.fn_handler("/setup.html", Method::Get, |request| {
-            request
-                .into_ok_response()?
-                .write_all(AP_SETUP_HTML.as_bytes())
-        })?;
+        http_server
+            .fn_handler("/setup.html", Method::Get, |request| {
+                request
+                    .into_ok_response()?
+                    .write_all(AP_SETUP_HTML.as_bytes())
+            })?
+            .fn_handler::<anyhow::Error, _>("/image", Method::Get, move |request| {
+                let fb = camera_value
+                    .get_framebuffer()
+                    .context("Failed to get framebuffer")?;
+                let data = fb.data();
+
+                let headers = [
+                    ("Content-Type", "image/jpeg"),
+                    ("Content-Length", &data.len().to_string()),
+                ];
+
+                let mut response = request.into_response(200, None, &headers)?;
+                response.write_all(data)?;
+
+                Ok(())
+            })?;
 
         add_setup_form_handler(&mut http_server, nvs_default_partition, false)?;
     }
