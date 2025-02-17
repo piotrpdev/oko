@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
     let nvs_default_partition = EspDefaultNvsPartition::take()?;
 
     let setup_details = get_setup_details(&nvs_default_partition)?;
-    let is_setup_details_empty = setup_details.ssid.is_empty()
+    let esp_needs_setup = setup_details.ssid.is_empty()
         || setup_details.pass.is_empty()
         || setup_details.oko.is_empty();
 
@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
         )?;
 
         // ! Switching from AP to STA seems to keep AP DNS details, even after restart. IP and Gateway seem to update fine.
-        if is_setup_details_empty {
+        if esp_needs_setup {
             info!("No setup details found, starting AP");
 
             wifi = start_ap(esp_wifi, &sys_loop).await?;
@@ -102,7 +102,7 @@ fn main() -> anyhow::Result<()> {
             wifi = start_sta(esp_wifi, &sys_loop).await?;
         }
 
-        let _http_server = start_http_server(nvs_default_partition)?;
+        let _http_server = start_http_server(nvs_default_partition, esp_needs_setup)?;
 
         // TODO: Wait for a signal, e.g. lost connection, instead of infinitely
         wifi.wifi_wait(|_| Ok(true), None).await?;
@@ -188,81 +188,108 @@ async fn start_sta(
 
 fn start_http_server(
     nvs_default_partition: EspNvsPartition<NvsDefault>,
+    esp_needs_setup: bool,
 ) -> anyhow::Result<EspHttpServer<'static>> {
-    let mut http_server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration::default())?;
+    let mut http_server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration {
+        uri_match_wildcard: true,
+        ..Default::default()
+    })?;
 
-    // TODO: Extract location to a constant
-    // TODO: Handle all possible URLs for captive portal/connection testing
     // TODO: On fail redirect to error page
-    http_server
-        .fn_handler("/setup.html", Method::Get, |request| {
-            request
-                .into_ok_response()?
-                .write_all(AP_SETUP_HTML.as_bytes())
-        })?
-        .fn_handler("/generate_204", Method::Get, |request| {
-            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
-            request
-                .into_response(301, None, &[("Location", &location)])?
-                .flush()
-        })?
-        .fn_handler("/gen_204", Method::Get, |request| {
-            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
-            request
-                .into_response(301, None, &[("Location", &location)])?
-                .flush()
-        })?
-        .fn_handler("/connecttest.txt", Method::Get, |request| {
-            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
-            request
-                .into_response(301, None, &[("Location", &location)])?
-                .flush()
-        })?
-        .fn_handler("/redirect", Method::Get, |request| {
-            let location = format!("http://{AP_GATEWAY_IP}/setup.html");
-            request
-                .into_response(301, None, &[("Location", &location)])?
-                .flush()
-        })?
-        .fn_handler::<anyhow::Error, _>("/setup.html", Method::Post, move |mut req| {
-            // Can this be exploited?
-            let len = req.content_len().unwrap_or(0);
 
-            if len > AP_MAX_PAYLOAD_LEN || len == 0 {
-                info!("Bad setup form data payload size: {}", len);
-                req.into_status_response(413)?.flush()?;
+    if esp_needs_setup {
+        info!("Adding single wildcard HTTP captive portal handler");
+
+        http_server.fn_handler("/*", Method::Get, |request| {
+            let setup_location = format!("http://{AP_GATEWAY_IP}/setup.html");
+
+            if !["/setup.html", "/setup.html#success", "/setup.html#error"].contains(&request.uri())
+            {
+                request
+                    .into_response(301, None, &[("Location", &setup_location)])?
+                    .flush()?;
+
                 return Ok(());
             }
 
-            let mut buf = vec![0; len.try_into()?];
-            req.read_exact(&mut buf)?;
-
-            info!(
-                "Received setup form data (length: {}): {:?}",
-                len,
-                String::from_utf8(buf.clone())?
-            );
-
-            let form = serde_urlencoded::from_bytes::<FormData>(&buf)?;
-            info!(
-                "Setup form details: SSID: {}, Pass: {}, Oko: {}",
-                form.ssid, form.pass, form.oko
-            );
-
-            validate_form_data(&form)?;
-            info!("Form is valid");
-
-            save_setup_details(&nvs_default_partition, &form)?;
-
-            let location = format!("http://{AP_GATEWAY_IP}/setup.html#success");
-            req.into_response(301, None, &[("Location", &location)])?
-                .flush()?;
-
-            info!("Restarting device...");
-            esp_idf_svc::hal::reset::restart();
+            request
+                .into_ok_response()?
+                .write_all(AP_SETUP_HTML.as_bytes())
         })?;
 
+        add_setup_form_handler(&mut http_server, nvs_default_partition, true)?;
+    } else {
+        info!("Adding HTTP handlers");
+
+        // TODO: Add 404 handler/redirect
+        http_server.fn_handler("/setup.html", Method::Get, |request| {
+            request
+                .into_ok_response()?
+                .write_all(AP_SETUP_HTML.as_bytes())
+        })?;
+
+        add_setup_form_handler(&mut http_server, nvs_default_partition, false)?;
+    }
+
     Ok(http_server)
+}
+
+fn add_setup_form_handler(
+    http_server: &mut EspHttpServer<'static>,
+    nvs_default_partition: EspNvsPartition<NvsDefault>,
+    use_wildcard: bool,
+) -> anyhow::Result<()> {
+    let uri = if use_wildcard { "/*" } else { "/setup.html" };
+
+    http_server.fn_handler::<anyhow::Error, _>(uri, Method::Post, move |mut request| {
+        let setup_location = format!("http://{AP_GATEWAY_IP}/setup.html");
+
+        if request.uri() != "/setup.html" {
+            request
+                .into_response(301, None, &[("Location", &setup_location)])?
+                .flush()?;
+
+            return Ok(());
+        }
+
+        // Can this be exploited?
+        let len = request.content_len().unwrap_or(0);
+
+        if len > AP_MAX_PAYLOAD_LEN || len == 0 {
+            info!("Bad setup form data payload size: {}", len);
+            request.into_status_response(413)?.flush()?;
+            return Ok(());
+        }
+
+        let mut buf = vec![0; len.try_into()?];
+        request.read_exact(&mut buf)?;
+
+        info!(
+            "Received setup form data (length: {}): {:?}",
+            len,
+            String::from_utf8(buf.clone())?
+        );
+
+        let form = serde_urlencoded::from_bytes::<FormData>(&buf)?;
+        info!(
+            "Setup form details: SSID: {}, Pass: {}, Oko: {}",
+            form.ssid, form.pass, form.oko
+        );
+
+        validate_form_data(&form)?;
+        info!("Form is valid");
+
+        save_setup_details(&nvs_default_partition, &form)?;
+
+        request
+            .into_response(301, None, &[("Location", &(setup_location + "#success"))])?
+            .flush()?;
+
+        info!("Restarting device...");
+        esp_idf_svc::hal::reset::restart();
+    })?;
+
+    Ok(())
 }
 
 fn validate_form_data(form: &FormData) -> anyhow::Result<()> {
