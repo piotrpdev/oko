@@ -70,6 +70,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-io-mini"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f4bca901d33e2db8e73c5229b48afd74d8d6d080c5ed9c3b48c3e933d0978b8"
+dependencies = [
+ "embassy-time",
+ "embassy-time-driver",
+ "enumset",
+ "futures-io",
+ "futures-lite",
+ "heapless",
+ "libc",
+ "log",
+]
+
+[[package]]
 name = "async-lock"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -468,6 +484,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9c93de5d34b8efcd4ba923913f51d1968bff7660ac264942601cfa64ae4c4f4"
 dependencies = [
  "async-io",
+ "async-io-mini",
  "edge-nal",
  "embedded-io-async",
  "futures-lite",
