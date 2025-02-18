@@ -1,4 +1,8 @@
-use std::{thread::JoinHandle, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use anyhow::{bail, Context};
 use embedded_svc::http::Headers;
@@ -51,6 +55,11 @@ const AP_CAPTIVE_PORTAL_DNS_TTL: std::time::Duration = core::time::Duration::fro
 const AP_SETUP_HTML: &str = include_str!("setup.html");
 const AP_MAX_PAYLOAD_LEN: u64 = 256;
 
+const WS_TIMEOUT: Duration = Duration::from_secs(10);
+const WS_CAPTURE_INTERVAL: Duration = Duration::from_millis(500);
+
+const CAMERA_ANY_PORT_INDICATOR_TEXT: &str = "camera_any_port";
+
 #[derive(Deserialize, Debug)]
 struct FormData {
     ssid: String,
@@ -74,10 +83,15 @@ fn main() -> anyhow::Result<()> {
         || setup_details.pass.is_empty()
         || setup_details.oko.is_empty();
 
+    // ? Maybe move this whole thing to another thread instead of blocking the main one
     block_on(async move {
         let mut wifi;
         let _captive_portal_dns;
-        let mut camera: Option<Camera<'_>> = None;
+        let _ws_client: WebSocketClient;
+
+        info!("Initializing camera");
+        // ? Maybe use parking_lot instead of std::sync
+        let camera: Arc<Mutex<Camera<'_>>> = Arc::new(Mutex::new(init_camera(peripherals.pins)?));
 
         let mut esp_wifi = create_esp_wifi(
             peripherals.modem,
@@ -93,10 +107,8 @@ fn main() -> anyhow::Result<()> {
 
             _captive_portal_dns = start_dns_captive_portal()?;
         } else {
-            info!("Setup details found, initializing camera");
-            camera = Some(init_camera(peripherals.pins)?);
+            info!("Setup details found, connecting to network");
 
-            info!("Connecting to network");
             esp_wifi.set_configuration(&Configuration::Client(
                 esp_idf_svc::wifi::ClientConfiguration {
                     ssid: (&setup_details.ssid.clone()[..]).try_into().map_err(|()| {
@@ -110,11 +122,11 @@ fn main() -> anyhow::Result<()> {
             ))?;
 
             wifi = start_sta(esp_wifi, &sys_loop).await?;
+
+            _ws_client = start_websocket_client(camera.clone())?;
         }
 
         let _http_server = start_http_server(nvs_default_partition, esp_needs_setup, camera)?;
-
-        start_websocket_client()?;
 
         // TODO: Wait for a signal, e.g. lost connection, instead of infinitely
         wifi.wifi_wait(|_| Ok(true), None).await?;
@@ -231,7 +243,7 @@ async fn start_sta(
 fn start_http_server(
     nvs_default_partition: EspNvsPartition<NvsDefault>,
     esp_needs_setup: bool,
-    camera: Option<Camera<'static>>,
+    camera: Arc<Mutex<Camera<'static>>>,
 ) -> anyhow::Result<EspHttpServer<'static>> {
     let mut http_server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration {
         uri_match_wildcard: true,
@@ -259,13 +271,11 @@ fn start_http_server(
                 .into_ok_response()?
                 .write_all(AP_SETUP_HTML.as_bytes())
         })?;
-
-        add_setup_form_handler(&mut http_server, nvs_default_partition, true)?;
     } else {
         info!("Adding HTTP handlers");
-        let camera_value = camera.context("No camera in HTTP server")?;
 
         // TODO: Add 404 handler/redirect
+        #[allow(clippy::significant_drop_tightening)] // Cannot drop earlier
         http_server
             .fn_handler("/setup.html", Method::Get, |request| {
                 request
@@ -273,7 +283,11 @@ fn start_http_server(
                     .write_all(AP_SETUP_HTML.as_bytes())
             })?
             .fn_handler::<anyhow::Error, _>("/image", Method::Get, move |request| {
-                let fb = camera_value
+                let camera_lock = camera
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("Failed to lock camera in /image handler"))?;
+
+                let fb = camera_lock
                     .get_framebuffer()
                     .context("Failed to get framebuffer")?;
                 let data = fb.data();
@@ -288,9 +302,9 @@ fn start_http_server(
 
                 Ok(())
             })?;
-
-        add_setup_form_handler(&mut http_server, nvs_default_partition, false)?;
     }
+
+    add_setup_form_handler(&mut http_server, nvs_default_partition, esp_needs_setup)?;
 
     Ok(http_server)
 }
@@ -346,6 +360,7 @@ fn add_setup_form_handler(
             .into_response(301, None, &[("Location", &(setup_location + "#success"))])?
             .flush()?;
 
+        // TODO: Restart device after a delay
         info!("Restarting device...");
         esp_idf_svc::hal::reset::restart();
     })?;
@@ -513,26 +528,80 @@ fn dns_server_task() -> anyhow::Result<()> {
     })
 }
 
-// TODO: Don't block the thread, or just start a new one for the client
-// TODO: Respond to Connected and Closed messages
-fn start_websocket_client() -> anyhow::Result<()> {
-    info!("Starting WebSocket client");
-    let mut ws_client = EspWebSocketClient::new(
-        "ws://192.168.0.28:8080/ws",
-        &EspWebSocketClientConfig::default(),
-        Duration::from_secs(10),
-        handle_event,
-    )?;
+fn start_websocket_client(camera: Arc<Mutex<Camera<'static>>>) -> anyhow::Result<WebSocketClient> {
+    // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
+    task::thread::ThreadSpawnConfiguration::default().set()?;
 
-    while !ws_client.is_connected() {
-        std::thread::sleep(Duration::from_millis(100));
+    let thread_handle = std::thread::Builder::new()
+        .name("websocket_client".to_string())
+        .spawn(move || websocket_client_task(camera))?;
+
+    let websocket_client = WebSocketClient {
+        thread_handle: Some(thread_handle),
+    };
+
+    Ok(websocket_client)
+}
+
+pub struct WebSocketClient {
+    thread_handle: Option<JoinHandle<anyhow::Result<()>>>,
+}
+
+impl Drop for WebSocketClient {
+    fn drop(&mut self) {
+        if let Some(handle) = self.thread_handle.take() {
+            // abort the thread
+            let _ = handle.join();
+        }
     }
+}
 
-    info!("Sending WebSocket message");
-    let message = "Hello, World!";
-    ws_client.send(FrameType::Text(false), message.as_bytes())?;
+// TODO: Respond to Connected and Closed messages
+#[allow(clippy::significant_drop_tightening)] // Makes code more readable
+#[allow(clippy::needless_pass_by_value)] // Is this possible without being annoying?
+fn websocket_client_task(camera: Arc<Mutex<Camera<'static>>>) -> anyhow::Result<()> {
+    block_on(async {
+        info!("Starting WebSocket client");
+        let mut ws_client = EspWebSocketClient::new(
+            "ws://192.168.0.28:3000/api/ws",
+            &EspWebSocketClientConfig::default(),
+            WS_TIMEOUT,
+            handle_event,
+        )?;
 
-    Ok(())
+        while !ws_client.is_connected() {
+            // TODO: Don't block the thread
+            std::thread::sleep(Duration::from_millis(100));
+        }
+
+        info!("Sending WebSocket message");
+        ws_client.send(
+            FrameType::Text(false),
+            CAMERA_ANY_PORT_INDICATOR_TEXT.as_bytes(),
+        )?;
+
+        loop {
+            let camera_lock = camera
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Failed to lock camera in /image handler"))?;
+
+            let fb = camera_lock
+                .get_framebuffer()
+                .context("Failed to get framebuffer")?;
+            let data = fb.data();
+
+            ws_client.send(FrameType::Binary(false), data)?;
+
+            // TODO: Don't block the thread
+            info!(
+                "Sleeping for {} millis before next capture",
+                WS_CAPTURE_INTERVAL.as_millis()
+            );
+            std::thread::sleep(WS_CAPTURE_INTERVAL);
+        }
+
+        // WebSocket connection closed on drop
+    })
 }
 
 fn handle_event(event: &Result<WebSocketEvent, EspIOError>) {
