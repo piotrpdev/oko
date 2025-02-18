@@ -36,6 +36,9 @@ esp-camera-rs = { path = "./esp-camera-rs" }
 [build-dependencies]
 embuild = "0.33"
 
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp_websocket_client", version = "1.4.0" }
+
 [lints.rust]
 unsafe_code = "forbid"
 unused_imports = "warn"

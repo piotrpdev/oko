@@ -14,7 +14,7 @@
 ## Build and Flash/Run
 
 ```bash
-source ~/export-esp.sh
+source ~/export-esp.sh # Needed to download components in "components_esp32.lock"
 cargo build
 cargo run
 ```

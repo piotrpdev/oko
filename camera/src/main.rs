@@ -1,4 +1,4 @@
-use std::thread::JoinHandle;
+use std::{thread::JoinHandle, time::Duration};
 
 use anyhow::{bail, Context};
 use embedded_svc::http::Headers;
@@ -11,17 +11,22 @@ use esp_idf_svc::{
         task::{self, block_on},
     },
     http::{server::EspHttpServer, Method},
-    io::{Read, Write},
+    io::{EspIOError, Read, Write},
     ipv4,
     netif::{EspNetif, NetifConfiguration, NetifStack},
     nvs::{EspDefaultNvsPartition, EspNvs, EspNvsPartition, NvsDefault},
     sys::camera,
     timer::EspTaskTimerService,
     wifi::{AccessPointConfiguration, AsyncWifi, Configuration, EspWifi, WifiDriver},
+    ws::{
+        client::{EspWebSocketClient, EspWebSocketClientConfig, WebSocketEvent},
+        FrameType,
+    },
 };
 use log::info;
 use serde::Deserialize;
 
+// TODO: Change import usage for easier reading
 // TODO: Display possible networks to connect to
 // TODO: Improve error handling
 // TODO: Add more logging everywhere
@@ -108,6 +113,8 @@ fn main() -> anyhow::Result<()> {
         }
 
         let _http_server = start_http_server(nvs_default_partition, esp_needs_setup, camera)?;
+
+        start_websocket_client()?;
 
         // TODO: Wait for a signal, e.g. lost connection, instead of infinitely
         wifi.wifi_wait(|_| Ok(true), None).await?;
@@ -504,4 +511,35 @@ fn dns_server_task() -> anyhow::Result<()> {
 
         Ok(())
     })
+}
+
+// TODO: Don't block the thread, or just start a new one for the client
+// TODO: Respond to Connected and Closed messages
+fn start_websocket_client() -> anyhow::Result<()> {
+    info!("Starting WebSocket client");
+    let mut ws_client = EspWebSocketClient::new(
+        "ws://192.168.0.28:8080/ws",
+        &EspWebSocketClientConfig::default(),
+        Duration::from_secs(10),
+        handle_event,
+    )?;
+
+    while !ws_client.is_connected() {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    info!("Sending WebSocket message");
+    let message = "Hello, World!";
+    ws_client.send(FrameType::Text(false), message.as_bytes())?;
+
+    Ok(())
+}
+
+fn handle_event(event: &Result<WebSocketEvent, EspIOError>) {
+    let Ok(ref ev) = *event else {
+        info!("Received WebSocket event error");
+        return;
+    };
+
+    info!("Received WebSocket event: {:#?}", ev.event_type);
 }
