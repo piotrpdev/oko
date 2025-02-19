@@ -10,6 +10,7 @@ use esp_camera_rs::Camera;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     hal::{
+        gpio::{PinDriver, Pull},
         modem::Modem,
         prelude::Peripherals,
         task::{self, block_on},
@@ -37,6 +38,7 @@ use serde::Deserialize;
 // TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
 // TODO: Make messages/strings consistent
 
+const PREFERENCES_RESET_LIGHT_DURATION: Duration = Duration::from_millis(1000);
 const PREFERENCES_MAX_STR_LEN: usize = 100;
 const PREFERENCES_NAMESPACE: &str = "preferences";
 const PREFERENCES_KEY_SSID: &str = "ssid";
@@ -51,7 +53,7 @@ const AP_WIFI_CHANNEL: u8 = 11;
 const AP_CAPTIVE_PORTAL_DNS_IP: std::net::Ipv4Addr = core::net::Ipv4Addr::UNSPECIFIED;
 const AP_CAPTIVE_PORTAL_DNS_PORT: u16 = 53;
 const AP_CAPTIVE_PORTAL_BUF_SIZE: usize = 1500;
-const AP_CAPTIVE_PORTAL_DNS_TTL: std::time::Duration = core::time::Duration::from_secs(300);
+const AP_CAPTIVE_PORTAL_DNS_TTL: Duration = Duration::from_secs(300);
 const AP_SETUP_HTML: &str = include_str!("setup.html");
 const AP_MAX_PAYLOAD_LEN: u64 = 256;
 
@@ -74,9 +76,25 @@ fn main() -> anyhow::Result<()> {
 
     info!("Staring Oko camera...");
 
-    let peripherals = Peripherals::take()?;
+    let mut peripherals = Peripherals::take()?;
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs_default_partition = EspDefaultNvsPartition::take()?;
+
+    {
+        let mut lamp_pin = PinDriver::output(&mut peripherals.pins.gpio4)?;
+        let mut factory_reset_pin = PinDriver::input(&mut peripherals.pins.gpio0)?;
+        factory_reset_pin.set_pull(Pull::Down)?;
+
+        if factory_reset_pin.is_low() {
+            info!("factory_reset_pin is low, resetting preferences...");
+            lamp_pin.set_high()?;
+
+            clear_setup_details(&nvs_default_partition)?;
+
+            std::thread::sleep(PREFERENCES_RESET_LIGHT_DURATION);
+            lamp_pin.set_low()?;
+        }
+    }
 
     let setup_details = get_setup_details(&nvs_default_partition)?;
     let esp_needs_setup = setup_details.ssid.is_empty()
@@ -479,6 +497,20 @@ fn save_setup_details(
     Ok(())
 }
 
+fn clear_setup_details(nvs_default_partition: &EspNvsPartition<NvsDefault>) -> anyhow::Result<()> {
+    info!("Clearing setup details");
+    let mut nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
+
+    let empty: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
+
+    info!("Setting raw setup detail data");
+    nvs.set_raw(PREFERENCES_KEY_SSID, &empty)?;
+    nvs.set_raw(PREFERENCES_KEY_PASS, &empty)?;
+    nvs.set_raw(PREFERENCES_KEY_OKO, &empty)?;
+
+    Ok(())
+}
+
 fn start_dns_captive_portal() -> anyhow::Result<CaptivePortalDns> {
     // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
     task::thread::ThreadSpawnConfiguration::default().set()?;
@@ -559,7 +591,6 @@ impl Drop for WebSocketClient {
     }
 }
 
-// TODO: Respond to Connected and Closed messages
 #[allow(clippy::significant_drop_tightening)] // Makes code more readable
 #[allow(clippy::needless_pass_by_value)] // Is this possible without being annoying?
 fn websocket_client_task(
@@ -612,6 +643,7 @@ fn websocket_client_task(
     })
 }
 
+// TODO: Respond to Connected and Closed WebSocket messages
 fn handle_event(event: &Result<WebSocketEvent, EspIOError>) {
     let Ok(ref ev) = *event else {
         info!("Received WebSocket event error");
