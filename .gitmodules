@@ -1,0 +1,3 @@
+[submodule "camera/esp-camera-rs"]
+	path = camera/esp-camera-rs
+	url = ../esp-camera-rs.git
