@@ -37,6 +37,7 @@ use serde::Deserialize;
 // TODO: Add more logging everywhere
 // TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
 // TODO: Make messages/strings consistent
+// TODO: Make pins easier to configure
 
 const PREFERENCES_RESET_LIGHT_DURATION: Duration = Duration::from_millis(1000);
 const PREFERENCES_MAX_STR_LEN: usize = 100;
