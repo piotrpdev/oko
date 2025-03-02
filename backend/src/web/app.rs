@@ -456,6 +456,7 @@ async fn handle_socket(
     // unsolicited messages to client based on some sort of server's internal event (i.e .timer).
     let (mut sender, mut receiver) = socket.split();
 
+    // TODO: Maybe send pings to client
     // Spawn a task that will push several messages to the client (does not matter what client does)
     #[allow(clippy::if_not_else)]
     let mut send_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
@@ -518,22 +519,24 @@ async fn handle_socket(
     // TODO: Reduce amount of cloning in this function
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            let message = process_message(msg.clone(), who);
+            process_message(msg.clone(), who);
 
-            // print message and break if instructed to do so
-            if message.is_break() {
-                break;
-            }
+            match msg.clone() {
+                Message::Binary(_) => {
+                    if !is_camera {
+                        continue;
+                    }
 
-            if is_camera {
-                // TODO: Make sure msg is Binary
-                let img_container = ImageContainer {
-                    camera_id,
-                    timestamp: OffsetDateTime::now_utc().unix_timestamp(),
-                    image_bytes: msg.into_data(),
-                };
+                    let img_container = ImageContainer {
+                        camera_id,
+                        timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+                        image_bytes: msg.into_data(),
+                    };
 
-                let _ = state.images_tx.send(img_container);
+                    let _ = state.images_tx.send(img_container);
+                }
+                Message::Close(_) => break,
+                _ => (),
             }
         }
     });
