@@ -62,6 +62,12 @@ const WS_TIMEOUT: Duration = Duration::from_secs(10);
 const WS_CAPTURE_INTERVAL: Duration = Duration::from_millis(5000);
 
 const CAMERA_ANY_PORT_INDICATOR_TEXT: &str = "camera_any_port";
+const CAMERA_DEFAULT_XCLK_FREQ: i32 = 8 * 1_000_000;
+const CAMERA_DEFAULT_JPG_QUALITY: i32 = 12;
+const CAMERA_DEFAULT_FB_COUNT: usize = 2;
+const CAMERA_DEFAULT_GRAB_MODE: camera::camera_grab_mode_t =
+    camera::camera_grab_mode_t_CAMERA_GRAB_LATEST;
+const CAMERA_DEFAULT_FRAME_SIZE: camera::framesize_t = camera::framesize_t_FRAMESIZE_SVGA;
 
 #[derive(Deserialize, Debug)]
 struct FormData {
@@ -175,11 +181,11 @@ fn init_camera(
         pins.gpio25,
         pins.gpio23,
         pins.gpio22,
-        8 * 1_000_000,
-        12,
-        2,
-        camera::camera_grab_mode_t_CAMERA_GRAB_LATEST,
-        camera::framesize_t_FRAMESIZE_SVGA,
+        CAMERA_DEFAULT_XCLK_FREQ,
+        CAMERA_DEFAULT_JPG_QUALITY,
+        CAMERA_DEFAULT_FB_COUNT,
+        CAMERA_DEFAULT_GRAB_MODE,
+        CAMERA_DEFAULT_FRAME_SIZE,
     )?;
 
     Ok(camera)
