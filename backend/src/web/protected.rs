@@ -376,6 +376,8 @@ mod patch {
                 setting.flashlight_enabled = settings_form.flashlight_enabled;
                 // setting.resolution = settings_form.resolution;
                 // setting.framerate = settings_form.framerate;
+                setting.last_modified = CameraSetting::DEFAULT.last_modified();
+                setting.modified_by = Some(user.user_id);
 
                 if (setting.update_using_self(&auth_session.backend.db).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
