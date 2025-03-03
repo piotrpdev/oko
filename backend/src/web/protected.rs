@@ -26,6 +26,14 @@ pub fn router() -> Router<()> {
             "/api/permissions/:permission_id",
             patch(self::patch::permissions),
         )
+        .route(
+            "/api/cameras/:camera_id/settings",
+            get(self::get::camera_settings),
+        )
+        .route(
+            "/api/settings/:setting_id",
+            patch(self::patch::camera_settings),
+        )
 }
 
 mod get {
@@ -34,7 +42,9 @@ mod get {
     use serde::Serialize;
     use tokio_util::io::ReaderStream;
 
-    use crate::{db::Camera, CameraPermission, CameraPermissionView, Model, User, Video};
+    use crate::{
+        db::Camera, CameraPermission, CameraPermissionView, CameraSetting, Model, User, Video,
+    };
 
     use super::{AuthSession, IntoResponse, StatusCode};
 
@@ -183,6 +193,24 @@ mod get {
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
+
+    pub async fn camera_settings(
+        auth_session: AuthSession,
+        Path(camera_id): Path<i64>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(_) => {
+                let Ok(settings) =
+                    CameraSetting::get_for_camera(&auth_session.backend.db, camera_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                Json(settings).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
 }
 
 // TODO: Don't always return the same error
@@ -199,6 +227,8 @@ mod post {
         pub name: String,
         pub address: String,
     }
+
+    // TODO: Create camera permissions for new users
 
     pub async fn cameras(
         auth_session: AuthSession,
@@ -267,7 +297,7 @@ mod post {
 
 mod patch {
     use super::{AuthSession, IntoResponse, StatusCode};
-    use crate::{CameraPermission, Model};
+    use crate::{CameraPermission, CameraSetting, Model};
     use axum::{extract::Path, Form, Json};
     use serde::Deserialize;
 
@@ -302,6 +332,55 @@ mod patch {
                 };
 
                 Json(permission).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct UpdateSettingsForm {
+        pub flashlight_enabled: bool,
+        // pub resolution: String,
+        // pub framerate: i64
+    }
+
+    pub async fn camera_settings(
+        auth_session: AuthSession,
+        Path(setting_id): Path<i64>,
+        Form(settings_form): Form<UpdateSettingsForm>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                let Ok(mut setting) =
+                    CameraSetting::get_using_id(&auth_session.backend.db, setting_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                let Ok(permissions) =
+                    CameraPermission::list_for_camera(&auth_session.backend.db, setting.camera_id)
+                        .await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                if !permissions
+                    .iter()
+                    .any(|p| (p.user_id == user.user_id) && p.can_control)
+                {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                // TODO: Update resolution and framerate
+                setting.flashlight_enabled = settings_form.flashlight_enabled;
+                // setting.resolution = settings_form.resolution;
+                // setting.framerate = settings_form.framerate;
+
+                if (setting.update_using_self(&auth_session.backend.db).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                Json(setting).into_response()
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
         }

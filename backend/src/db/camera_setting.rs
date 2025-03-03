@@ -111,6 +111,22 @@ impl Model for CameraSetting {
     }
 }
 
+impl CameraSetting {
+    pub async fn get_for_camera(pool: &SqlitePool, camera_id: i64) -> Result<Self> {
+        sqlx::query_as!(
+            CameraSetting,
+            r#"
+            SELECT *
+            FROM camera_settings
+            WHERE camera_id = ?
+            "#,
+            camera_id
+        )
+        .fetch_one(pool)
+        .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,6 +243,21 @@ mod tests {
 
         let impossible_deleted = CameraSetting::delete_using_id(&pool, setting_id).await;
         assert!(impossible_deleted.is_err());
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_settings")
+    ))]
+    async fn get_for_camera(pool: SqlitePool) -> Result<()> {
+        let camera_id = 1;
+
+        let returned_settings = CameraSetting::get_for_camera(&pool, camera_id).await?;
+
+        assert_eq!(returned_settings.setting_id, 1);
+        assert_eq!(returned_settings.camera_id, camera_id);
 
         Ok(())
     }

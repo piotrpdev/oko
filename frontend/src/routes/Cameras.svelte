@@ -16,11 +16,17 @@
 
   import { user } from "../lib/stores/userStore";
   import DashboardLayout from "$lib/layouts/DashboardLayout.svelte";
-  import { type Camera, type CameraPermission } from "../types";
+  import {
+    type Camera,
+    type CameraPermission,
+    type CameraSetting,
+  } from "../types";
   import CameraAndVideos from "$lib/components/CameraAndVideos.svelte";
   import { Check } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import type { Selected } from "bits-ui";
+  import { Separator } from "$lib/components/ui/separator";
+  import { Switch } from "$lib/components/ui/switch";
 
   let selectedCameraId: number | null = null;
   let selectedCameraName: string | null = null;
@@ -29,6 +35,7 @@
   let address = "192.168.0.30";
 
   // TODO: Refresh cameras on add/remove
+  // TODO: Better indication that "Save Settings" button isn't needed for "User Permissions"
   // ? Maybe use a store for cameras
   // ? Maybe show confirmation dialog on remove
 
@@ -84,12 +91,6 @@
   let getPermissionsPromise: Promise<CameraPermission[]> = Promise.resolve([]);
   const refreshPermissions = (cameraId: number) =>
     (getPermissionsPromise = getPermissions(cameraId));
-
-  function editCameraDialogOpenChange(isOpen: boolean, cameraId: number) {
-    if (!isOpen) return;
-
-    getPermissionsPromise = getPermissions(cameraId);
-  }
 
   const userRoleOptions = [
     {
@@ -169,6 +170,62 @@
 
     refreshPermissions(permission.camera_id);
   }
+
+  let getSettingsPromise: Promise<CameraSetting> = Promise.resolve({
+    camera_id: -1,
+    flashlight_enabled: false,
+    framerate: -1,
+    last_modified: [],
+    modified_by: -1,
+    resolution: "",
+    setting_id: -1,
+  });
+  const refreshSettings = (cameraId: number) =>
+    (getSettingsPromise = getSettings(cameraId));
+
+  async function getSettings(cameraId: number): Promise<CameraSetting> {
+    const response = await fetch(`/api/cameras/${cameraId}/settings`);
+
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    } else {
+      console.error(`Failed to fetch settings for camera ${cameraId}`);
+      throw new Error(`Failed to fetch settings for camera ${cameraId}`);
+    }
+  }
+
+  function editCameraDialogOpenChange(isOpen: boolean, cameraId: number) {
+    if (!isOpen) return;
+
+    getPermissionsPromise = getPermissions(cameraId);
+    getSettingsPromise = getSettings(cameraId);
+  }
+
+  async function onSaveSettings({ target }: Event, setting: CameraSetting) {
+    const formData = new FormData(target as HTMLFormElement);
+
+    // Shadcn switch uses undefined for unchecked
+    let data = {
+      ...setting,
+      flashlight_enabled: "false",
+      ...Object.fromEntries(formData.entries()),
+    };
+
+    const response = await fetch(`/api/settings/${setting.setting_id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(data as unknown as URLSearchParams), // Too lazy to manually convert everything to string
+    });
+
+    if (response.ok) {
+      refreshSettings(setting.setting_id);
+    } else {
+      console.error("Save Settings failed");
+    }
+  }
 </script>
 
 <DashboardLayout tab="Cameras">
@@ -222,11 +279,12 @@
                   </Dialog.Trigger>
                   <!-- TODO: Fix layout shift caused by await -->
                   <Dialog.Content class="sm:max-w-[425px]">
-                    <form class="contents">
+                    <div class="contents">
                       <Dialog.Header>
                         <Dialog.Title>Edit Camera</Dialog.Title>
                       </Dialog.Header>
-                      <div class="grid gap-4 py-4">
+                      <div class="grid gap-4 pt-4">
+                        <h4 class="text-sm font-medium">User Permissions</h4>
                         {#await getPermissionsPromise}
                           <!-- TODO: Use skeletons -->
                           <span class="px-3 py-0 text-muted-foreground"
@@ -288,7 +346,45 @@
                           <p>{error.message}</p>
                         {/await}
                       </div>
-                    </form>
+                      <Separator class="my-2" />
+                      <div class="grid gap-4 pb-4">
+                        <h4 class="text-sm font-medium">Settings</h4>
+                        {#await getSettingsPromise}
+                          <!-- TODO: Use skeletons -->
+                          <span class="px-3 py-0 text-muted-foreground"
+                            >Loading...</span
+                          >
+                        {:then settings}
+                          <form
+                            class="contents"
+                            on:submit|preventDefault={(event) =>
+                              onSaveSettings(event, settings)}
+                          >
+                            <div
+                              class="flex items-center justify-between space-x-2"
+                            >
+                              <Label for="flashlight" class="flex flex-col">
+                                <span class="font-normal">Flashlight</span>
+                              </Label>
+                              <Switch
+                                id="flashlight"
+                                aria-label="Flashlight"
+                                name="flashlight_enabled"
+                                value="true"
+                                checked={settings.flashlight_enabled}
+                              />
+                            </div>
+                            <Button
+                              variant="outline"
+                              class="w-full"
+                              type="submit">Save Settings</Button
+                            >
+                          </form>
+                        {:catch error}
+                          <p>{error.message}</p>
+                        {/await}
+                      </div>
+                    </div>
                   </Dialog.Content>
                 </Dialog.Root>
               {/if}
