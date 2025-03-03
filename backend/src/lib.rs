@@ -1,6 +1,6 @@
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-pub use crate::web::{App, ImageContainer};
+pub use crate::web::{ApiChannelMessage, App, ImageContainer};
 
 mod db;
 mod users;
@@ -8,7 +8,8 @@ mod web;
 
 pub use {
     db::Camera, db::CameraPermission, db::CameraPermissionUserView, db::CameraPermissionView,
-    db::CameraSetting, db::Model, db::User, db::Video, db::VideoCameraView,
+    db::CameraSetting, db::CameraSettingNoMeta, db::Model, db::User, db::Video,
+    db::VideoCameraView,
 };
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

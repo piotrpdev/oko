@@ -15,6 +15,16 @@ pub struct CameraSetting {
     pub modified_by: Option<i64>,
 }
 
+// TODO: Use single shared definition for both camera and backend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraSettingNoMeta {
+    pub setting_id: i64,
+    pub camera_id: i64,
+    pub flashlight_enabled: bool,
+    pub resolution: String,
+    pub framerate: i64,
+}
+
 pub struct Default {
     pub setting_id: i64,
     pub flashlight_enabled: bool,

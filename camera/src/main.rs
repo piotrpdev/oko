@@ -10,7 +10,7 @@ use esp_camera_rs::Camera;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     hal::{
-        gpio::{PinDriver, Pull},
+        gpio::{self, PinDriver, Pull},
         modem::Modem,
         prelude::Peripherals,
         task::{self, block_on},
@@ -24,11 +24,13 @@ use esp_idf_svc::{
     timer::EspTaskTimerService,
     wifi::{AccessPointConfiguration, AsyncWifi, Configuration, EspWifi, WifiDriver},
     ws::{
-        client::{EspWebSocketClient, EspWebSocketClientConfig, WebSocketEvent},
+        client::{
+            EspWebSocketClient, EspWebSocketClientConfig, WebSocketEvent, WebSocketEventType,
+        },
         FrameType,
     },
 };
-use log::info;
+use log::{error, info};
 use serde::Deserialize;
 
 // TODO: Change import usage for easier reading
@@ -69,6 +71,23 @@ const CAMERA_DEFAULT_GRAB_MODE: camera::camera_grab_mode_t =
     camera::camera_grab_mode_t_CAMERA_GRAB_LATEST;
 const CAMERA_DEFAULT_FRAME_SIZE: camera::framesize_t = camera::framesize_t_FRAMESIZE_SVGA;
 
+// TODO: Use single shared definition for both camera and backend
+#[derive(Debug, Clone, Deserialize)]
+pub struct CameraSettingNoMeta {
+    pub setting_id: i64,
+    pub camera_id: i64,
+    pub flashlight_enabled: bool,
+    pub resolution: String,
+    pub framerate: i64,
+}
+
+// TODO: Use single shared definition for both camera and backend
+#[derive(Deserialize, Debug, Clone)]
+pub enum CameraMessage {
+    SettingChanged(CameraSettingNoMeta),
+    Restart,
+}
+
 #[derive(Deserialize, Debug)]
 struct FormData {
     ssid: String,
@@ -87,21 +106,23 @@ fn main() -> anyhow::Result<()> {
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs_default_partition = EspDefaultNvsPartition::take()?;
 
+    // TODO: See if not leaking memory here is possible
+    let mut lamp_pin_leak = PinDriver::output(Box::leak(Box::new(peripherals.pins.gpio4)))?;
     {
-        let mut lamp_pin = PinDriver::output(&mut peripherals.pins.gpio4)?;
         let mut factory_reset_pin = PinDriver::input(&mut peripherals.pins.gpio0)?;
         factory_reset_pin.set_pull(Pull::Down)?;
 
         if factory_reset_pin.is_low() {
             info!("factory_reset_pin is low, resetting preferences...");
-            lamp_pin.set_high()?;
+            lamp_pin_leak.set_high()?;
 
             clear_setup_details(&nvs_default_partition)?;
 
             std::thread::sleep(PREFERENCES_RESET_LIGHT_DURATION);
-            lamp_pin.set_low()?;
+            lamp_pin_leak.set_low()?;
         }
     }
+    let lamp_pin = Arc::new(Mutex::new(lamp_pin_leak));
 
     let setup_details = get_setup_details(&nvs_default_partition)?;
     let esp_needs_setup = setup_details.ssid.is_empty()
@@ -115,8 +136,30 @@ fn main() -> anyhow::Result<()> {
         let _ws_client: WebSocketClient;
 
         info!("Initializing camera");
+        let cam = Camera::new(
+            peripherals.pins.gpio32,
+            peripherals.pins.gpio0,
+            peripherals.pins.gpio26,
+            peripherals.pins.gpio27,
+            peripherals.pins.gpio5,
+            peripherals.pins.gpio18,
+            peripherals.pins.gpio19,
+            peripherals.pins.gpio21,
+            peripherals.pins.gpio36,
+            peripherals.pins.gpio39,
+            peripherals.pins.gpio34,
+            peripherals.pins.gpio35,
+            peripherals.pins.gpio25,
+            peripherals.pins.gpio23,
+            peripherals.pins.gpio22,
+            CAMERA_DEFAULT_XCLK_FREQ,
+            CAMERA_DEFAULT_JPG_QUALITY,
+            CAMERA_DEFAULT_FB_COUNT,
+            CAMERA_DEFAULT_GRAB_MODE,
+            CAMERA_DEFAULT_FRAME_SIZE,
+        )?;
         // ? Maybe use parking_lot instead of std::sync
-        let camera: Arc<Mutex<Camera<'_>>> = Arc::new(Mutex::new(init_camera(peripherals.pins)?));
+        let camera: Arc<Mutex<Camera<'_>>> = Arc::new(Mutex::new(cam));
 
         let mut esp_wifi = create_esp_wifi(
             peripherals.modem,
@@ -148,7 +191,7 @@ fn main() -> anyhow::Result<()> {
 
             wifi = start_sta(esp_wifi, &sys_loop).await?;
 
-            _ws_client = start_websocket_client(camera.clone(), setup_details)?;
+            _ws_client = start_websocket_client(camera.clone(), lamp_pin, setup_details)?;
         }
 
         let _http_server = start_http_server(nvs_default_partition, esp_needs_setup, camera)?;
@@ -160,35 +203,6 @@ fn main() -> anyhow::Result<()> {
     })?;
 
     Ok(())
-}
-
-fn init_camera(
-    pins: esp_idf_svc::hal::gpio::Pins,
-) -> anyhow::Result<esp_camera_rs::Camera<'static>> {
-    let camera = Camera::new(
-        pins.gpio32,
-        pins.gpio0,
-        pins.gpio26,
-        pins.gpio27,
-        pins.gpio5,
-        pins.gpio18,
-        pins.gpio19,
-        pins.gpio21,
-        pins.gpio36,
-        pins.gpio39,
-        pins.gpio34,
-        pins.gpio35,
-        pins.gpio25,
-        pins.gpio23,
-        pins.gpio22,
-        CAMERA_DEFAULT_XCLK_FREQ,
-        CAMERA_DEFAULT_JPG_QUALITY,
-        CAMERA_DEFAULT_FB_COUNT,
-        CAMERA_DEFAULT_GRAB_MODE,
-        CAMERA_DEFAULT_FRAME_SIZE,
-    )?;
-
-    Ok(camera)
 }
 
 fn create_esp_wifi(
@@ -569,6 +583,7 @@ fn dns_server_task() -> anyhow::Result<()> {
 
 fn start_websocket_client(
     camera: Arc<Mutex<Camera<'static>>>,
+    lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
     form: FormData,
 ) -> anyhow::Result<WebSocketClient> {
     // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
@@ -576,7 +591,7 @@ fn start_websocket_client(
 
     let thread_handle = std::thread::Builder::new()
         .name("websocket_client".to_string())
-        .spawn(move || websocket_client_task(camera, form))?;
+        .spawn(move || websocket_client_task(camera, lamp_pin, form))?;
 
     let websocket_client = WebSocketClient {
         thread_handle: Some(thread_handle),
@@ -602,6 +617,7 @@ impl Drop for WebSocketClient {
 #[allow(clippy::needless_pass_by_value)] // Is this possible without being annoying?
 fn websocket_client_task(
     camera: Arc<Mutex<Camera<'static>>>,
+    lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
     form: FormData,
 ) -> anyhow::Result<()> {
     block_on(async {
@@ -615,7 +631,7 @@ fn websocket_client_task(
             &ws_url,
             &EspWebSocketClientConfig::default(),
             WS_TIMEOUT,
-            handle_event,
+            move |event| handle_event(&lamp_pin, event),
         )?;
 
         while !ws_client.is_connected() {
@@ -651,11 +667,46 @@ fn websocket_client_task(
 }
 
 // TODO: Respond to Connected and Closed WebSocket messages
-fn handle_event(event: &Result<WebSocketEvent, EspIOError>) {
+fn handle_event(
+    lamp_pin: &Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    event: &Result<WebSocketEvent, EspIOError>,
+) {
     let Ok(ref ev) = *event else {
         info!("Received WebSocket event error");
         return;
     };
 
     info!("Received WebSocket event: {:#?}", ev.event_type);
+
+    // TODO: See if setting changes block for too long
+    if let WebSocketEventType::Text(text) = ev.event_type {
+        // TODO: look into bincode (fastest?) / rmp-serde (wide support) / flatbuffers (partial deserialization)
+        let Ok(camera_message) = serde_json::from_str::<CameraMessage>(text) else {
+            info!("Failed to parse WebSocket text event");
+            return;
+        };
+
+        info!("Received WebSocket camera_message: {:#?}", camera_message);
+
+        if let CameraMessage::SettingChanged(setting) = camera_message {
+            info!("Received WebSocket setting change: {:#?}", setting);
+
+            let Ok(mut lamp_pin_lock) = lamp_pin.lock() else {
+                error!("Failed to lock lamp pin in WebSocket handler");
+                return;
+            };
+
+            if setting.flashlight_enabled {
+                info!("Enabling flashlight");
+                if let Err(e) = lamp_pin_lock.set_high() {
+                    error!("Failed to set lamp pin high: {:#?}", e);
+                }
+            } else {
+                info!("Disabling flashlight");
+                if let Err(e) = lamp_pin_lock.set_low() {
+                    error!("Failed to set lamp pin low: {:#?}", e);
+                }
+            }
+        }
+    }
 }

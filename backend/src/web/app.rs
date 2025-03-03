@@ -26,7 +26,7 @@ use time::{Duration, OffsetDateTime};
 use tokio::{
     net::TcpListener,
     signal,
-    sync::watch,
+    sync::{watch, Mutex},
     task::{AbortHandle, JoinHandle},
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -51,7 +51,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     users::{AuthSession, Backend},
     web::{auth, protected},
-    Camera, CameraPermissionView, Model, User, Video,
+    ApiChannelMessage, Camera, CameraPermissionView, Model, User, Video,
 };
 
 const SQLITE_URL: &str = "sqlite://data.db";
@@ -82,6 +82,7 @@ pub struct ImageContainer {
 struct AppState {
     images_tx: watch::Sender<ImageContainer>,
     video_path: PathBuf,
+    api_channel: watch::Sender<ApiChannelMessage>,
 }
 
 pub struct App {
@@ -174,9 +175,12 @@ impl App {
             image_bytes: vec![],
         });
 
+        let api_channel = watch::Sender::new(ApiChannelMessage::Initial);
+
         let state = Arc::new(AppState {
             images_tx: tx,
             video_path: self.video_path,
+            api_channel: api_channel.clone(),
         });
 
         let main_router = Router::new()
@@ -184,7 +188,7 @@ impl App {
             .with_state(state);
 
         // TODO: Order of merge matters here, make sure the correct routes are protected and that fallback works as intended.
-        let app = protected::router()
+        let app = protected::router(api_channel)
             .fallback_service(embedded_assets_service)
             .route_layer(login_required!(Backend, login_url = "/api/login"))
             .merge(main_router)
@@ -454,14 +458,16 @@ async fn handle_socket(
 
     // By splitting socket we can send and receive at the same time. In this example we will send
     // unsolicited messages to client based on some sort of server's internal event (i.e .timer).
-    let (mut sender, mut receiver) = socket.split();
+    let (sender, mut receiver) = socket.split();
+    // TODO: Investigate performance of Tokio Mutex, there could be better options
+    let sender_mutex = Arc::new(Mutex::new(sender));
 
-    // TODO: Maybe send pings to client
     // Spawn a task that will push several messages to the client (does not matter what client does)
     #[allow(clippy::if_not_else)]
     let mut send_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if !is_camera {
             let mut images_rx = state.images_tx.subscribe();
+            let sender_mutex_clone = sender_mutex.clone();
             // TODO: Proper error handling
             tokio::spawn(async move {
                 let mut first_received = false;
@@ -482,7 +488,11 @@ async fn handle_socket(
                         let message_json_msg = Message::Text(message_json.clone());
 
                         // TODO: Handle error here
-                        let _ = sender.send(message_json_msg).await;
+                        sender_mutex_clone
+                            .lock()
+                            .await
+                            .send(message_json_msg)
+                            .await?;
                     }
 
                     if images_rx.changed().await.is_err() {
@@ -494,7 +504,9 @@ async fn handle_socket(
 
                 info!("Sending close to {who}...");
 
-                if let Err(e) = sender
+                if let Err(e) = sender_mutex_clone
+                    .lock()
+                    .await
                     .send(Message::Close(Some(CloseFrame {
                         code: axum::extract::ws::close_code::NORMAL,
                         reason: Cow::from("Goodbye"),
@@ -517,6 +529,7 @@ async fn handle_socket(
 
     // This second task will receive messages from client and print them on server console
     // TODO: Reduce amount of cloning in this function
+    let recv_state_clone = state.clone();
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             process_message(msg.clone(), who);
@@ -533,13 +546,61 @@ async fn handle_socket(
                         image_bytes: msg.into_data(),
                     };
 
-                    let _ = state.images_tx.send(img_container);
+                    let _ = recv_state_clone.images_tx.send(img_container);
                 }
                 Message::Close(_) => break,
                 _ => (),
             }
         }
     });
+
+    let mut api_listener_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
+        if is_camera {
+            let api_channel = state.api_channel.clone();
+            let sender_mutex_clone = sender_mutex.clone();
+            let mut first_received = false;
+            tokio::spawn(async move {
+                let mut api_channel_rx = api_channel.subscribe();
+                loop {
+                    let api_msg = (*api_channel_rx.borrow_and_update()).clone();
+
+                    if first_received {
+                        match api_msg {
+                            ApiChannelMessage::CameraRelated {
+                                camera_id: message_camera_id,
+                                message,
+                            } => {
+                                if message_camera_id == camera_id {
+                                    info!("API channel message received for api_camera_id {message_camera_id} for {who}...");
+
+                                    sender_mutex_clone
+                                        .lock()
+                                        .await
+                                        .send(Message::Text(serde_json::to_string(&message)?))
+                                        .await?;
+                                }
+                            }
+                            ApiChannelMessage::Initial => (),
+                        }
+                    }
+
+                    if api_channel_rx.changed().await.is_err() {
+                        break;
+                    }
+
+                    first_received = true;
+                }
+
+                Ok(())
+            })
+        } else {
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(EMPTY_TASK_SLEEP_DURATION);
+                loop {
+                    interval.tick().await;
+                }
+            })
+        };
 
     // If any one of the tasks exit, abort the other.
     tokio::select! {
@@ -549,6 +610,7 @@ async fn handle_socket(
                 Err(a) => error!("Error sending messages {a:?}")
             }
             recv_task.abort();
+            api_listener_task.abort();
             recording_token_clone.cancel();
             tracker.wait().await;
         },
@@ -558,6 +620,7 @@ async fn handle_socket(
                 Err(b) => error!("Error receiving messages {b:?}")
             }
             send_task.abort();
+            api_listener_task.abort();
             recording_token_clone.cancel();
             tracker.wait().await;
         },
@@ -567,6 +630,13 @@ async fn handle_socket(
                 Err(c) => error!("Error recording images {c:?}")
             }
             // ? Maybe do something if recording fails e.g. send a message to the client/DB
+        },
+        rv_d = (&mut api_listener_task) => {
+            match rv_d {
+                Ok(_) => info!("api_listener_task finished for {who}"),
+                Err(d) => error!("Error listening to API channel {d:?}")
+            }
+            // ? Maybe do something if api channel fails e.g. send a message to the client/DB
         }
     }
 

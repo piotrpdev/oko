@@ -36,6 +36,7 @@
 
   // TODO: Refresh cameras on add/remove
   // TODO: Better indication that "Save Settings" button isn't needed for "User Permissions"
+  // TODO: Display toast on API errors?
   // ? Maybe use a store for cameras
   // ? Maybe show confirmation dialog on remove
 

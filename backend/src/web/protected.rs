@@ -4,10 +4,12 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
+use tokio::sync::watch;
 
 use crate::users::AuthSession;
+use crate::ApiChannelMessage;
 
-pub fn router() -> Router<()> {
+pub fn router(api_channel: watch::Sender<ApiChannelMessage>) -> Router<()> {
     Router::new()
         .route("/api/", get(self::get::protected))
         .route("/api/cameras", get(self::get::cameras))
@@ -34,6 +36,7 @@ pub fn router() -> Router<()> {
             "/api/settings/:setting_id",
             patch(self::patch::camera_settings),
         )
+        .with_state(api_channel)
 }
 
 mod get {
@@ -298,9 +301,17 @@ mod post {
 
 mod patch {
     use super::{AuthSession, IntoResponse, StatusCode};
-    use crate::{CameraPermission, CameraSetting, Model};
-    use axum::{extract::Path, Form, Json};
+    use crate::{
+        web::CameraMessage, ApiChannelMessage, CameraPermission, CameraSetting,
+        CameraSettingNoMeta, Model,
+    };
+    use axum::{
+        extract::{Path, State},
+        Form, Json,
+    };
     use serde::Deserialize;
+    use tokio::sync::watch;
+    use tracing::warn;
 
     #[derive(Debug, Clone, Deserialize)]
     pub struct UpdatePermissionForm {
@@ -347,6 +358,7 @@ mod patch {
 
     pub async fn camera_settings(
         auth_session: AuthSession,
+        state: State<watch::Sender<ApiChannelMessage>>,
         Path(setting_id): Path<i64>,
         Form(settings_form): Form<UpdateSettingsForm>,
     ) -> impl IntoResponse {
@@ -381,6 +393,21 @@ mod patch {
 
                 if (setting.update_using_self(&auth_session.backend.db).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                let api_message = ApiChannelMessage::CameraRelated {
+                    camera_id: setting.camera_id,
+                    message: CameraMessage::SettingChanged(CameraSettingNoMeta {
+                        setting_id: setting.setting_id,
+                        camera_id: setting.camera_id,
+                        flashlight_enabled: setting.flashlight_enabled,
+                        resolution: setting.resolution.clone(),
+                        framerate: setting.framerate,
+                    }),
+                };
+
+                if state.send(api_message).is_err() {
+                    warn!("Failed to send camera_settings update to API channel");
                 }
 
                 Json(setting).into_response()
