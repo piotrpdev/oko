@@ -147,7 +147,8 @@ mod get {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
 
-                let Some(filename) = video.file_path.split(std::path::MAIN_SEPARATOR).last() else {
+                let Some(filename) = video.file_path.split(std::path::MAIN_SEPARATOR).next_back()
+                else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
                 let content_type = "video/mp4";
@@ -250,7 +251,7 @@ mod post {
 
                 if (camera.create_using_self(&auth_session.backend.db).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 let mut camera_setting = CameraSetting {
                     setting_id: CameraSetting::DEFAULT.setting_id,
@@ -268,7 +269,7 @@ mod post {
                     .is_err()
                 {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 let mut camera_permission = CameraPermission {
                     permission_id: CameraPermission::DEFAULT.permission_id,
@@ -284,7 +285,7 @@ mod post {
                     .is_err()
                 {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 Json(camera).into_response()
             }
@@ -329,7 +330,7 @@ mod patch {
 
                 if (permission.update_using_self(&auth_session.backend.db).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 Json(permission).into_response()
             }
@@ -378,7 +379,7 @@ mod patch {
 
                 if (setting.update_using_self(&auth_session.backend.db).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 Json(setting).into_response()
             }
@@ -404,7 +405,7 @@ mod delete {
 
                 if (Camera::delete_using_id(&auth_session.backend.db, camera_id).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 Json(camera_id).into_response()
             }

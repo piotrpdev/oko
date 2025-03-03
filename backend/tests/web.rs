@@ -190,7 +190,7 @@ async fn camera_add_remove(
         .await?
     {
         return Err("Front Door camera not found".into());
-    };
+    }
 
     if page
         .is_visible(
@@ -200,7 +200,7 @@ async fn camera_add_remove(
         .await?
     {
         return Err("Backyard camera found too early".into());
-    };
+    }
 
     page.click_builder("button#add-camera").click().await?;
 
@@ -339,7 +339,7 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
     let created_video_path_str = newest_video.file_path.clone();
     let Some(created_video_filename) = created_video_path_str
         .split(std::path::MAIN_SEPARATOR)
-        .last()
+        .next_back()
     else {
         return Err("No filename found".into());
     };
@@ -663,7 +663,7 @@ async fn camera_user_can_view(
         .await?
     {
         return Err("Front Door camera not found".into());
-    };
+    }
 
     if page
         .is_visible(
@@ -673,7 +673,7 @@ async fn camera_user_can_view(
         .await?
     {
         return Err("Kitchen camera found when it shouldn't have".into());
-    };
+    }
 
     Ok(())
 }
@@ -722,7 +722,7 @@ async fn camera_user_permission_updates(
         .await?
     {
         return Err("Front Door camera not found".into());
-    };
+    }
 
     page.click_builder("button[aria-label=\"Edit Camera\"][data-camera-id=\"1\"]")
         .click()
