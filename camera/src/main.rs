@@ -647,6 +647,8 @@ fn apply_camera_settings(
         }
     }
 
+    // TODO: resolution and framerate
+
     Ok(())
 }
 
