@@ -15,6 +15,7 @@ pub struct CameraSetting {
     pub modified_by: Option<i64>,
 }
 
+// TODO: Add from trait for CameraSetting -> CameraSettingNoMeta
 // TODO: Use single shared definition for both camera and backend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraSettingNoMeta {

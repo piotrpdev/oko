@@ -50,8 +50,9 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     users::{AuthSession, Backend},
-    web::{auth, protected},
-    ApiChannelMessage, Camera, CameraPermissionView, Model, User, Video,
+    web::{auth, protected, CameraMessage},
+    ApiChannelMessage, Camera, CameraPermissionView, CameraSetting, CameraSettingNoMeta, Model,
+    User, Video,
 };
 
 const SQLITE_URL: &str = "sqlite://data.db";
@@ -316,6 +317,7 @@ async fn handle_socket(
         }
     }
 
+    let mut initial_camera_settings = None;
     let mut cameras: Vec<CameraPermissionView> = Vec::new();
 
     if is_camera {
@@ -341,6 +343,15 @@ async fn handle_socket(
 
             camera_id = db_camera.camera_id;
         }
+
+        let Ok(camera_settings) =
+            CameraSetting::get_for_camera(&auth_session.backend.db, camera_id).await
+        else {
+            error!("Error getting initial camera settings for camera {camera_id}, aborting...");
+            return;
+        };
+
+        initial_camera_settings = Some(camera_settings);
     } else {
         // TODO: Return errors to user
         let Some(user) = auth_session.user else {
@@ -560,6 +571,28 @@ async fn handle_socket(
             let sender_mutex_clone = sender_mutex.clone();
             let mut first_received = false;
             tokio::spawn(async move {
+                if let Some(some_camera_settings) = initial_camera_settings {
+                    let some_initial_camera_settings = CameraSettingNoMeta {
+                        flashlight_enabled: some_camera_settings.flashlight_enabled,
+                        resolution: some_camera_settings.resolution,
+                        framerate: some_camera_settings.framerate,
+                    };
+
+                    let initial_camera_setting_message =
+                        CameraMessage::SettingChanged(some_initial_camera_settings);
+
+                    if let Err(e) = sender_mutex_clone
+                        .lock()
+                        .await
+                        .send(Message::Text(serde_json::to_string(
+                            &initial_camera_setting_message,
+                        )?))
+                        .await
+                    {
+                        error!("Error sending initial camera settings to {who}: {e:?}");
+                    }
+                }
+
                 let mut api_channel_rx = api_channel.subscribe();
                 loop {
                     let api_msg = (*api_channel_rx.borrow_and_update()).clone();
@@ -573,11 +606,16 @@ async fn handle_socket(
                                 if message_camera_id == camera_id {
                                     info!("API channel message received for api_camera_id {message_camera_id} for {who}...");
 
-                                    sender_mutex_clone
+                                    if let Err(e) = sender_mutex_clone
                                         .lock()
                                         .await
                                         .send(Message::Text(serde_json::to_string(&message)?))
-                                        .await?;
+                                        .await
+                                    {
+                                        error!(
+                                            "Error sending API WebSocket message to {who}: {e:?}"
+                                        );
+                                    }
                                 }
                             }
                             ApiChannelMessage::Initial => (),
