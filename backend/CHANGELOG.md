@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/piotrpdev/oko/compare/oko-v0.1.5...oko-v0.1.6) - 2025-03-04
+
+### Added
+
+- OKO-104 sync camera settings on conn
+- OKO-104 store/get camera settings
+- OKO-104 send setting change to camera
+- OKO-104 flashlight setting
+
+### Fixed
+
+- OKO-104 change setting modified fields
+- OKO-104 handle ping
+
+### Other
+
+- OKO-104 catch up on clippy
+
 ## [0.1.5](https://github.com/piotrpdev/oko/compare/oko-v0.1.4...oko-v0.1.5) - 2025-02-09
 
 ### Added
