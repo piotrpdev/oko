@@ -78,7 +78,7 @@ async fn login_and_logout(
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
-    scripts("users", "cameras", "camera_permissions")
+    scripts("users", "cameras", "camera_permissions", "camera_settings")
 ))]
 async fn live_feed(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (_p, context, addr_str, addr, _video_temp_dir) = utils::setup(&pool).await?;
@@ -226,7 +226,7 @@ async fn camera_add_remove(
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
-    scripts("users", "cameras", "camera_permissions", "videos")
+    scripts("users", "cameras", "camera_permissions", "videos", "camera_settings")
 ))]
 async fn record(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (_p, _context, _addr_str, addr, video_temp_dir) = utils::setup(&pool).await?;
@@ -298,7 +298,7 @@ async fn record(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send
 // This test might be a bit flaky
 #[sqlx::test(fixtures(
     path = "../fixtures",
-    scripts("users", "cameras", "camera_permissions", "videos")
+    scripts("users", "cameras", "camera_permissions", "videos", "camera_settings")
 ))]
 async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (_p, context, addr_str, addr, video_temp_dir) = utils::setup(&pool).await?;
@@ -412,7 +412,7 @@ async fn download_video(pool: SqlitePool) -> Result<(), Box<dyn std::error::Erro
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
-    scripts("users", "cameras", "camera_permissions")
+    scripts("users", "cameras", "camera_permissions", "camera_settings")
 ))]
 async fn home_feeds(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (_p, context, addr_str, addr, _video_temp_dir) = utils::setup(&pool).await?;
@@ -491,7 +491,7 @@ async fn home_feeds(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error + 
 
 #[sqlx::test(fixtures(
     path = "../fixtures",
-    scripts("users", "cameras", "camera_permissions", "videos")
+    scripts("users", "cameras", "camera_permissions", "videos", "camera_settings")
 ))]
 async fn multi_camera_record(
     pool: SqlitePool,
