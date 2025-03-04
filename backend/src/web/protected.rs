@@ -4,10 +4,12 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
+use tokio::sync::watch;
 
 use crate::users::AuthSession;
+use crate::ApiChannelMessage;
 
-pub fn router() -> Router<()> {
+pub fn router(api_channel: watch::Sender<ApiChannelMessage>) -> Router<()> {
     Router::new()
         .route("/api/", get(self::get::protected))
         .route("/api/cameras", get(self::get::cameras))
@@ -26,6 +28,15 @@ pub fn router() -> Router<()> {
             "/api/permissions/:permission_id",
             patch(self::patch::permissions),
         )
+        .route(
+            "/api/cameras/:camera_id/settings",
+            get(self::get::camera_settings),
+        )
+        .route(
+            "/api/settings/:setting_id",
+            patch(self::patch::camera_settings),
+        )
+        .with_state(api_channel)
 }
 
 mod get {
@@ -34,7 +45,9 @@ mod get {
     use serde::Serialize;
     use tokio_util::io::ReaderStream;
 
-    use crate::{db::Camera, CameraPermission, CameraPermissionView, Model, User, Video};
+    use crate::{
+        db::Camera, CameraPermission, CameraPermissionView, CameraSetting, Model, User, Video,
+    };
 
     use super::{AuthSession, IntoResponse, StatusCode};
 
@@ -137,7 +150,8 @@ mod get {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
 
-                let Some(filename) = video.file_path.split(std::path::MAIN_SEPARATOR).last() else {
+                let Some(filename) = video.file_path.split(std::path::MAIN_SEPARATOR).next_back()
+                else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
                 let content_type = "video/mp4";
@@ -183,6 +197,24 @@ mod get {
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
+
+    pub async fn camera_settings(
+        auth_session: AuthSession,
+        Path(camera_id): Path<i64>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(_) => {
+                let Ok(settings) =
+                    CameraSetting::get_for_camera(&auth_session.backend.db, camera_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                Json(settings).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
 }
 
 // TODO: Don't always return the same error
@@ -199,6 +231,8 @@ mod post {
         pub name: String,
         pub address: String,
     }
+
+    // TODO: Create camera permissions for new users
 
     pub async fn cameras(
         auth_session: AuthSession,
@@ -220,7 +254,7 @@ mod post {
 
                 if (camera.create_using_self(&auth_session.backend.db).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 let mut camera_setting = CameraSetting {
                     setting_id: CameraSetting::DEFAULT.setting_id,
@@ -238,7 +272,7 @@ mod post {
                     .is_err()
                 {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 let mut camera_permission = CameraPermission {
                     permission_id: CameraPermission::DEFAULT.permission_id,
@@ -254,7 +288,7 @@ mod post {
                     .is_err()
                 {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 Json(camera).into_response()
             }
@@ -267,9 +301,17 @@ mod post {
 
 mod patch {
     use super::{AuthSession, IntoResponse, StatusCode};
-    use crate::{CameraPermission, Model};
-    use axum::{extract::Path, Form, Json};
+    use crate::{
+        web::CameraMessage, ApiChannelMessage, CameraPermission, CameraSetting,
+        CameraSettingNoMeta, Model,
+    };
+    use axum::{
+        extract::{Path, State},
+        Form, Json,
+    };
     use serde::Deserialize;
+    use tokio::sync::watch;
+    use tracing::warn;
 
     #[derive(Debug, Clone, Deserialize)]
     pub struct UpdatePermissionForm {
@@ -299,9 +341,74 @@ mod patch {
 
                 if (permission.update_using_self(&auth_session.backend.db).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 Json(permission).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct UpdateSettingsForm {
+        pub flashlight_enabled: bool,
+        // pub resolution: String,
+        // pub framerate: i64
+    }
+
+    pub async fn camera_settings(
+        auth_session: AuthSession,
+        state: State<watch::Sender<ApiChannelMessage>>,
+        Path(setting_id): Path<i64>,
+        Form(settings_form): Form<UpdateSettingsForm>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                let Ok(mut setting) =
+                    CameraSetting::get_using_id(&auth_session.backend.db, setting_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                let Ok(permissions) =
+                    CameraPermission::list_for_camera(&auth_session.backend.db, setting.camera_id)
+                        .await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                if !permissions
+                    .iter()
+                    .any(|p| (p.user_id == user.user_id) && p.can_control)
+                {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                // TODO: Update resolution and framerate
+                setting.flashlight_enabled = settings_form.flashlight_enabled;
+                // setting.resolution = settings_form.resolution;
+                // setting.framerate = settings_form.framerate;
+                setting.last_modified = CameraSetting::DEFAULT.last_modified();
+                setting.modified_by = Some(user.user_id);
+
+                if (setting.update_using_self(&auth_session.backend.db).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                let api_message = ApiChannelMessage::CameraRelated {
+                    camera_id: setting.camera_id,
+                    message: CameraMessage::SettingChanged(CameraSettingNoMeta {
+                        flashlight_enabled: setting.flashlight_enabled,
+                        resolution: setting.resolution.clone(),
+                        framerate: setting.framerate,
+                    }),
+                };
+
+                if state.send(api_message).is_err() {
+                    warn!("Failed to send camera_settings update to API channel");
+                }
+
+                Json(setting).into_response()
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
@@ -325,7 +432,7 @@ mod delete {
 
                 if (Camera::delete_using_id(&auth_session.backend.db, camera_id).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                };
+                }
 
                 Json(camera_id).into_response()
             }

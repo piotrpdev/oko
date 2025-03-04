@@ -33,3 +33,4 @@ static/
 backend/rust-toolchain.toml
 
 .embuild
+backend/.env

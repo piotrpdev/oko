@@ -15,6 +15,15 @@ pub struct CameraSetting {
     pub modified_by: Option<i64>,
 }
 
+// TODO: Add from trait for CameraSetting -> CameraSettingNoMeta
+// TODO: Use single shared definition for both camera and backend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraSettingNoMeta {
+    pub flashlight_enabled: bool,
+    pub resolution: String,
+    pub framerate: i64,
+}
+
 pub struct Default {
     pub setting_id: i64,
     pub flashlight_enabled: bool,
@@ -108,6 +117,22 @@ impl Model for CameraSetting {
         .await?;
 
         Ok(())
+    }
+}
+
+impl CameraSetting {
+    pub async fn get_for_camera(pool: &SqlitePool, camera_id: i64) -> Result<Self> {
+        sqlx::query_as!(
+            CameraSetting,
+            r#"
+            SELECT *
+            FROM camera_settings
+            WHERE camera_id = ?
+            "#,
+            camera_id
+        )
+        .fetch_one(pool)
+        .await
     }
 }
 
@@ -227,6 +252,21 @@ mod tests {
 
         let impossible_deleted = CameraSetting::delete_using_id(&pool, setting_id).await;
         assert!(impossible_deleted.is_err());
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("users", "cameras", "camera_settings")
+    ))]
+    async fn get_for_camera(pool: SqlitePool) -> Result<()> {
+        let camera_id = 1;
+
+        let returned_settings = CameraSetting::get_for_camera(&pool, camera_id).await?;
+
+        assert_eq!(returned_settings.setting_id, 1);
+        assert_eq!(returned_settings.camera_id, camera_id);
 
         Ok(())
     }

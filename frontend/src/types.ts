@@ -34,6 +34,16 @@ export type CameraPermission = {
   can_control: boolean;
 };
 
+export type CameraSetting = {
+  camera_id: number;
+  flashlight_enabled: boolean;
+  framerate: number;
+  last_modified: Array<number>;
+  modified_by: number;
+  resolution: string;
+  setting_id: number;
+};
+
 export type ImageContainer = {
   camera_id: number;
   timestamp: number;

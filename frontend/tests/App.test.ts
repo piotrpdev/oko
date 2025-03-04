@@ -37,6 +37,8 @@ function waitForStoreChange<T>(store: Writable<T>) {
   });
 }
 
+// TODO: maybe split into separate test files
+
 describe("Login Flow", () => {
   test("successful login updates user store", async () => {
     const userValue = get(user);
@@ -214,6 +216,7 @@ describe("Cameras page", () => {
   });
 
   // TODO: Add test for recording list?
+  // TODO: Add test for camera setting updates? (same logic as user permissions so probably not necessary)
 });
 
 describe("Home page", () => {

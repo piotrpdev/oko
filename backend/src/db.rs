@@ -5,6 +5,7 @@ pub use camera_permission::CameraPermission;
 pub use camera_permission_user_view::CameraPermissionUserView;
 pub use camera_permission_view::CameraPermissionView;
 pub use camera_setting::CameraSetting;
+pub use camera_setting::CameraSettingNoMeta;
 pub use user::User;
 pub use video::Video;
 pub use video_camera_view::VideoCameraView;
