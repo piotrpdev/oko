@@ -398,8 +398,6 @@ mod patch {
                 let api_message = ApiChannelMessage::CameraRelated {
                     camera_id: setting.camera_id,
                     message: CameraMessage::SettingChanged(CameraSettingNoMeta {
-                        setting_id: setting.setting_id,
-                        camera_id: setting.camera_id,
                         flashlight_enabled: setting.flashlight_enabled,
                         resolution: setting.resolution.clone(),
                         framerate: setting.framerate,

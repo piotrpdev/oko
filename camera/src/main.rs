@@ -40,13 +40,18 @@ use serde::Deserialize;
 // TODO: WSL / TLS / Investigate if TLS/encrypting images is too resource intensive
 // TODO: Make messages/strings consistent
 // TODO: Make pins easier to configure
+// TODO: Serialize before storing to NVS instead of storing raw bytes
+
+const NVS_MAX_STR_LEN: usize = 100;
 
 const PREFERENCES_RESET_LIGHT_DURATION: Duration = Duration::from_millis(1000);
-const PREFERENCES_MAX_STR_LEN: usize = 100;
 const PREFERENCES_NAMESPACE: &str = "preferences";
 const PREFERENCES_KEY_SSID: &str = "ssid";
 const PREFERENCES_KEY_PASS: &str = "pass";
 const PREFERENCES_KEY_OKO: &str = "oko";
+
+const CAMERA_SETTINGS_NAMESPACE: &str = "cam_settings";
+const CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED: &str = "flash_enabled";
 
 const VFS_MAX_FDS: usize = 5;
 
@@ -74,8 +79,6 @@ const CAMERA_DEFAULT_FRAME_SIZE: camera::framesize_t = camera::framesize_t_FRAME
 // TODO: Use single shared definition for both camera and backend
 #[derive(Debug, Clone, Deserialize)]
 pub struct CameraSettingNoMeta {
-    pub setting_id: i64,
-    pub camera_id: i64,
     pub flashlight_enabled: bool,
     pub resolution: String,
     pub framerate: i64,
@@ -113,10 +116,11 @@ fn main() -> anyhow::Result<()> {
         factory_reset_pin.set_pull(Pull::Down)?;
 
         if factory_reset_pin.is_low() {
-            info!("factory_reset_pin is low, resetting preferences...");
+            info!("factory_reset_pin is low, resetting preferences and camera settings...");
             lamp_pin_leak.set_high()?;
 
             clear_setup_details(&nvs_default_partition)?;
+            clear_camera_settings(&nvs_default_partition)?;
 
             std::thread::sleep(PREFERENCES_RESET_LIGHT_DURATION);
             lamp_pin_leak.set_low()?;
@@ -129,11 +133,15 @@ fn main() -> anyhow::Result<()> {
         || setup_details.pass.is_empty()
         || setup_details.oko.is_empty();
 
+    let saved_camera_settings = get_camera_settings(&nvs_default_partition)?;
+
     // ? Maybe move this whole thing to another thread instead of blocking the main one
     block_on(async move {
         let mut wifi;
         let _captive_portal_dns;
         let _ws_client: WebSocketClient;
+
+        apply_camera_settings(&lamp_pin, &saved_camera_settings)?;
 
         info!("Initializing camera");
         let cam = Camera::new(
@@ -191,7 +199,12 @@ fn main() -> anyhow::Result<()> {
 
             wifi = start_sta(esp_wifi, &sys_loop).await?;
 
-            _ws_client = start_websocket_client(camera.clone(), lamp_pin, setup_details)?;
+            _ws_client = start_websocket_client(
+                camera.clone(),
+                lamp_pin,
+                nvs_default_partition.clone(),
+                setup_details,
+            )?;
         }
 
         let _http_server = start_http_server(nvs_default_partition, esp_needs_setup, camera)?;
@@ -476,9 +489,9 @@ fn get_setup_details(
     info!("Getting setup details");
     let nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
 
-    let mut ssid_buffer: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
-    let mut pass_buffer: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
-    let mut oko_buffer: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
+    let mut ssid_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+    let mut pass_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+    let mut oko_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
 
     info!("Getting raw setup detail data");
     nvs.get_raw(PREFERENCES_KEY_SSID, &mut ssid_buffer)?;
@@ -522,12 +535,117 @@ fn clear_setup_details(nvs_default_partition: &EspNvsPartition<NvsDefault>) -> a
     info!("Clearing setup details");
     let mut nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
 
-    let empty: [u8; PREFERENCES_MAX_STR_LEN] = [0; PREFERENCES_MAX_STR_LEN];
+    let empty: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
 
     info!("Setting raw setup detail data");
     nvs.set_raw(PREFERENCES_KEY_SSID, &empty)?;
     nvs.set_raw(PREFERENCES_KEY_PASS, &empty)?;
     nvs.set_raw(PREFERENCES_KEY_OKO, &empty)?;
+
+    Ok(())
+}
+
+fn get_camera_settings(
+    nvs_default_partition: &EspNvsPartition<NvsDefault>,
+) -> anyhow::Result<CameraSettingNoMeta> {
+    info!("Getting camera settings");
+    let nvs = EspNvs::new(
+        nvs_default_partition.clone(),
+        CAMERA_SETTINGS_NAMESPACE,
+        true,
+    )?;
+
+    let mut flashlight_enabled_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+
+    info!("Getting raw camera settings data");
+    nvs.get_raw(
+        CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED,
+        &mut flashlight_enabled_buffer,
+    )?;
+
+    // TODO: resolution and framerate
+    info!("Converting raw camera settings data to strings");
+    let flashlight_enabled: bool = std::str::from_utf8(&flashlight_enabled_buffer)?
+        .trim()
+        .trim_matches(char::from(0))
+        .parse()
+        .unwrap_or(false);
+
+    Ok(CameraSettingNoMeta {
+        flashlight_enabled,
+        resolution: String::new(),
+        framerate: -1,
+    })
+}
+
+fn save_camera_settings(
+    nvs_default_partition: &EspNvsPartition<NvsDefault>,
+    setting: &CameraSettingNoMeta,
+) -> anyhow::Result<()> {
+    info!("Saving camera settings");
+    let mut nvs = EspNvs::new(
+        nvs_default_partition.clone(),
+        CAMERA_SETTINGS_NAMESPACE,
+        true,
+    )?;
+
+    // TODO: resolution and framerate
+    info!("Setting raw camera settings data");
+    nvs.set_raw(
+        CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED,
+        (if setting.flashlight_enabled {
+            "true"
+        } else {
+            "false"
+        })
+        .as_bytes(),
+    )?;
+
+    Ok(())
+}
+
+fn clear_camera_settings(
+    nvs_default_partition: &EspNvsPartition<NvsDefault>,
+) -> anyhow::Result<()> {
+    info!("Clearing camera settings");
+    let mut nvs = EspNvs::new(
+        nvs_default_partition.clone(),
+        CAMERA_SETTINGS_NAMESPACE,
+        true,
+    )?;
+
+    let empty: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+
+    info!("Setting raw camera settings data");
+    nvs.set_raw(CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED, &empty)?;
+
+    Ok(())
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn apply_camera_settings(
+    lamp_pin: &Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    setting: &CameraSettingNoMeta,
+) -> anyhow::Result<()> {
+    info!("Applying camera settings");
+
+    {
+        let Ok(mut lamp_pin_lock) = lamp_pin.lock() else {
+            anyhow::bail!("Failed to lock lamp pin in apply_camera_settings");
+        };
+
+        if setting.flashlight_enabled {
+            info!("Enabling flashlight");
+            if let Err(e) = lamp_pin_lock.set_high() {
+                anyhow::bail!("Failed to set lamp pin high: {:#?}", e);
+            }
+        } else {
+            info!("Disabling flashlight");
+            if let Err(e) = lamp_pin_lock.set_low() {
+                anyhow::bail!("Failed to set lamp pin low: {:#?}", e);
+            }
+        }
+    }
 
     Ok(())
 }
@@ -584,6 +702,7 @@ fn dns_server_task() -> anyhow::Result<()> {
 fn start_websocket_client(
     camera: Arc<Mutex<Camera<'static>>>,
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    nvs_default_partition: EspNvsPartition<NvsDefault>,
     form: FormData,
 ) -> anyhow::Result<WebSocketClient> {
     // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
@@ -591,7 +710,7 @@ fn start_websocket_client(
 
     let thread_handle = std::thread::Builder::new()
         .name("websocket_client".to_string())
-        .spawn(move || websocket_client_task(camera, lamp_pin, form))?;
+        .spawn(move || websocket_client_task(camera, lamp_pin, nvs_default_partition, form))?;
 
     let websocket_client = WebSocketClient {
         thread_handle: Some(thread_handle),
@@ -618,6 +737,7 @@ impl Drop for WebSocketClient {
 fn websocket_client_task(
     camera: Arc<Mutex<Camera<'static>>>,
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    nvs_default_partition: EspNvsPartition<NvsDefault>,
     form: FormData,
 ) -> anyhow::Result<()> {
     block_on(async {
@@ -631,7 +751,7 @@ fn websocket_client_task(
             &ws_url,
             &EspWebSocketClientConfig::default(),
             WS_TIMEOUT,
-            move |event| handle_event(&lamp_pin, event),
+            move |event| handle_event(&lamp_pin, &nvs_default_partition, event),
         )?;
 
         while !ws_client.is_connected() {
@@ -669,6 +789,7 @@ fn websocket_client_task(
 // TODO: Respond to Connected and Closed WebSocket messages
 fn handle_event(
     lamp_pin: &Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    nvs_default_partition: &EspNvsPartition<NvsDefault>,
     event: &Result<WebSocketEvent, EspIOError>,
 ) {
     let Ok(ref ev) = *event else {
@@ -691,22 +812,13 @@ fn handle_event(
         if let CameraMessage::SettingChanged(setting) = camera_message {
             info!("Received WebSocket setting change: {:#?}", setting);
 
-            let Ok(mut lamp_pin_lock) = lamp_pin.lock() else {
-                error!("Failed to lock lamp pin in WebSocket handler");
-                return;
-            };
+            apply_camera_settings(lamp_pin, &setting).unwrap_or_else(|e| {
+                error!("Failed to apply camera settings: {:#?}", e);
+            });
 
-            if setting.flashlight_enabled {
-                info!("Enabling flashlight");
-                if let Err(e) = lamp_pin_lock.set_high() {
-                    error!("Failed to set lamp pin high: {:#?}", e);
-                }
-            } else {
-                info!("Disabling flashlight");
-                if let Err(e) = lamp_pin_lock.set_low() {
-                    error!("Failed to set lamp pin low: {:#?}", e);
-                }
-            }
+            save_camera_settings(nvs_default_partition, &setting).unwrap_or_else(|e| {
+                error!("Failed to save camera settings: {:#?}", e);
+            });
         }
     }
 }
