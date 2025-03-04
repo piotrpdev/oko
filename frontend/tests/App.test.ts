@@ -37,6 +37,8 @@ function waitForStoreChange<T>(store: Writable<T>) {
   });
 }
 
+// TODO: maybe split into separate test files
+
 describe("Login Flow", () => {
   test("successful login updates user store", async () => {
     const userValue = get(user);
