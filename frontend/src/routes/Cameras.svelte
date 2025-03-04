@@ -376,6 +376,7 @@
                               />
                             </div>
                             <Button
+                              id="save-settings"
                               variant="outline"
                               class="w-full"
                               type="submit">Save Settings</Button

@@ -214,6 +214,7 @@ describe("Cameras page", () => {
   });
 
   // TODO: Add test for recording list?
+  // TODO: Add test for camera setting updates? (same logic as user permissions so probably not necessary)
 });
 
 describe("Home page", () => {

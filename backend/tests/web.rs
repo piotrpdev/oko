@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use futures_util::SinkExt;
-use oko::{CameraPermission, Model, Video};
+use oko::{CameraPermission, CameraSetting, Model, Video};
 use opencv::{
     core::{Mat, MatTraitConstManual},
     imgcodecs::{imdecode, IMREAD_COLOR},
@@ -14,6 +14,7 @@ use playwright::api::{
     page::{self},
 };
 use sqlx::SqlitePool;
+use time::OffsetDateTime;
 use tokio::time::{sleep, Duration};
 use ws_utils::Message;
 
@@ -788,6 +789,148 @@ async fn camera_user_permission_updates(
     };
 
     assert_eq!(new_permission_text, "Controller");
+
+    Ok(())
+}
+
+// TODO: Maybe handle resolution and framerate change too
+#[sqlx::test(fixtures(
+    path = "../fixtures",
+    scripts("users", "cameras", "camera_permissions", "camera_settings")
+))]
+async fn camera_setting_updates(
+    pool: SqlitePool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_p, context, addr_str, _addr, _video_temp_dir) = utils::setup(&pool).await?;
+
+    let page = context.new_page().await?;
+    page.goto_builder(&(addr_str.clone() + "#/login"))
+        .goto()
+        .await?;
+
+    page.click_builder("button#login").click().await?;
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/"));
+
+    page.wait_for_selector_builder("div#logout")
+        .wait_for_selector()
+        .await?;
+
+    page.click_builder("a[href=\"#/cameras\"]").click().await?;
+
+    let s: String = page.eval("() => location.href").await?;
+    assert_eq!(s, (addr_str.clone() + "#/cameras"));
+
+    page.click_builder("button#user-menu-button")
+        .click()
+        .await?;
+
+    if !page
+        .is_visible(
+            "button[aria-label=\"View Camera\"][data-camera-id=\"2\"]",
+            None,
+        )
+        .await?
+    {
+        return Err("Kitchen camera not found".into());
+    }
+
+    page.click_builder("button[aria-label=\"Edit Camera\"][data-camera-id=\"2\"]")
+        .click()
+        .await?;
+
+    let camera_setting = CameraSetting::get_for_camera(&pool, 2).await?;
+
+    assert_eq!(camera_setting.camera_id, 2);
+    assert_eq!(camera_setting.setting_id, 2);
+    assert!(!camera_setting.flashlight_enabled);
+    assert_eq!(camera_setting.resolution, "800x600");
+    assert_eq!(camera_setting.framerate, 5);
+    assert_eq!(camera_setting.modified_by, Some(2));
+    assert_eq!(
+        camera_setting.last_modified,
+        OffsetDateTime::from_unix_timestamp(1_729_530_145)?
+    );
+
+    let time_before_setting_update = OffsetDateTime::now_utc();
+
+    let Some(_flashlight_setting) = page
+        .wait_for_selector_builder("button[aria-label=\"Flashlight\"]")
+        .wait_for_selector()
+        .await?
+    else {
+        return Err("Flashlight setting switch not found".into());
+    };
+
+    let Some(is_flashlight_checked) = page
+        .get_attribute("button[aria-label=\"Flashlight\"]", "aria-checked", None)
+        .await?
+    else {
+        return Err("No aria-checked attribute found".into());
+    };
+
+    assert_eq!(is_flashlight_checked, "false");
+
+    page.click_builder("button[aria-label=\"Flashlight\"]")
+        .click()
+        .await?;
+
+    let Some(is_flashlight_checked_updated) = page
+        .get_attribute("button[aria-label=\"Flashlight\"]", "aria-checked", None)
+        .await?
+    else {
+        return Err("No aria-checked updated attribute found".into());
+    };
+
+    assert_eq!(is_flashlight_checked_updated, "true");
+
+    page.click_builder("button#save-settings").click().await?;
+
+    sleep(Duration::from_millis(200)).await;
+
+    let updated_camera_setting = CameraSetting::get_for_camera(&pool, 2).await?;
+
+    assert_eq!(updated_camera_setting.camera_id, 2);
+    assert_eq!(updated_camera_setting.setting_id, 2);
+    assert!(updated_camera_setting.flashlight_enabled);
+    assert_eq!(updated_camera_setting.resolution, "800x600");
+    assert_eq!(updated_camera_setting.framerate, 5);
+    assert_eq!(updated_camera_setting.modified_by, Some(1));
+    assert!(updated_camera_setting.last_modified > camera_setting.last_modified);
+    assert!(updated_camera_setting.last_modified >= time_before_setting_update);
+    assert!(updated_camera_setting.last_modified <= OffsetDateTime::now_utc());
+
+    page.click_builder("button[data-dialog-close]")
+        .click()
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    page.click_builder("button[aria-label=\"Edit Camera\"][data-camera-id=\"2\"]")
+        .click()
+        .await?;
+
+    let Some(_flashlight_setting_again) = page
+        .wait_for_selector_builder("button[aria-label=\"Flashlight\"]")
+        .wait_for_selector()
+        .await?
+    else {
+        return Err("Flashlight setting switch not found".into());
+    };
+
+    let Some(is_flashlight_checked_persistent) = page
+        .get_attribute("button[aria-label=\"Flashlight\"]", "aria-checked", None)
+        .await?
+    else {
+        return Err("No aria-checked persistent attribute found".into());
+    };
+
+    assert_eq!(is_flashlight_checked_persistent, "true");
 
     Ok(())
 }
