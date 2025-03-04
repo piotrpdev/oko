@@ -50,19 +50,33 @@
 </script>
 
 {#if toast}
-  <div class="pwa-toast" role="alert" aria-labelledby="toast-message">
+  <div
+    class="pwa-toast bg-background text-sm"
+    role="alert"
+    aria-labelledby="toast-message"
+  >
     <div class="message">
       <span id="toast-message">
         {message}
       </span>
     </div>
-    <div class="buttons">
+    <div class="buttons font-medium">
       {#if $needRefresh}
-        <button type="button" on:click={() => updateServiceWorker(true)}>
+        <button
+          class="bg-primary text-primary-foreground"
+          type="button"
+          on:click={() => updateServiceWorker(true)}
+        >
           Reload
         </button>
       {/if}
-      <button type="button" on:click={close}> Close </button>
+      <button
+        class="bg-primary-foreground text-primary"
+        type="button"
+        on:click={close}
+      >
+        Close
+      </button>
     </div>
   </div>
 {/if}
@@ -79,11 +93,10 @@
     border-radius: 4px;
     z-index: 2;
     text-align: left;
-    box-shadow: 3px 4px 5px 0 #8885;
-    background-color: white;
+    /* box-shadow: 3px 4px 5px 0 #8885; */
   }
   .pwa-toast .message {
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
   .pwa-toast .buttons {
     display: flex;
