@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7](https://github.com/piotrpdev/oko/compare/oko-v0.1.6...oko-v0.1.7) - 2025-03-05
+
+### Added
+
+- OKO-105 use camera settings for video
+- OKO-105 resolution setting
+- OKO-105 camera restart
+- OKO-105 framerate setting
+
+### Other
+
+- OKO-105 camera restart video warning
+- OKO-105 use resolution terms
+
 ## [0.1.6](https://github.com/piotrpdev/oko/compare/oko-v0.1.5...oko-v0.1.6) - 2025-03-04
 
 ### Added
