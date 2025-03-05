@@ -41,8 +41,11 @@ use serde::Deserialize;
 // TODO: Make messages/strings consistent
 // TODO: Make pins easier to configure
 // TODO: Serialize before storing to NVS instead of storing raw bytes
+// TODO: Optimize CLK frequency and JPEG quality
 
 const NVS_MAX_STR_LEN: usize = 100;
+const DEFAULT_RESOLUTION_STR: &str = "SVGA";
+const VALID_RESOLUTIONS: [&str; 2] = [DEFAULT_RESOLUTION_STR, "VGA"];
 
 const PREFERENCES_RESET_LIGHT_DURATION: Duration = Duration::from_millis(1000);
 const PREFERENCES_NAMESPACE: &str = "preferences";
@@ -52,6 +55,8 @@ const PREFERENCES_KEY_OKO: &str = "oko";
 
 const CAMERA_SETTINGS_NAMESPACE: &str = "cam_settings";
 const CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED: &str = "flash_enabled";
+const CAMERA_SETTINGS_KEY_FRAMERATE: &str = "framerate";
+const CAMERA_SETTINGS_KEY_RESOLUTION: &str = "resolution";
 
 const VFS_MAX_FDS: usize = 5;
 
@@ -66,7 +71,6 @@ const AP_SETUP_HTML: &str = include_str!("setup.html");
 const AP_MAX_PAYLOAD_LEN: u64 = 256;
 
 const WS_TIMEOUT: Duration = Duration::from_secs(10);
-const WS_CAPTURE_INTERVAL: Duration = Duration::from_millis(5000);
 
 const CAMERA_ANY_PORT_INDICATOR_TEXT: &str = "camera_any_port";
 const CAMERA_DEFAULT_XCLK_FREQ: i32 = 8 * 1_000_000;
@@ -143,6 +147,12 @@ fn main() -> anyhow::Result<()> {
 
         apply_camera_settings(&lamp_pin, &saved_camera_settings)?;
 
+        let frame_size = match saved_camera_settings.resolution.as_str() {
+            "VGA" => camera::framesize_t_FRAMESIZE_VGA,
+            "SVGA" => camera::framesize_t_FRAMESIZE_SVGA,
+            _ => CAMERA_DEFAULT_FRAME_SIZE,
+        };
+
         info!("Initializing camera");
         let cam = Camera::new(
             peripherals.pins.gpio32,
@@ -164,7 +174,7 @@ fn main() -> anyhow::Result<()> {
             CAMERA_DEFAULT_JPG_QUALITY,
             CAMERA_DEFAULT_FB_COUNT,
             CAMERA_DEFAULT_GRAB_MODE,
-            CAMERA_DEFAULT_FRAME_SIZE,
+            frame_size,
         )?;
         // ? Maybe use parking_lot instead of std::sync
         let camera: Arc<Mutex<Camera<'_>>> = Arc::new(Mutex::new(cam));
@@ -202,6 +212,7 @@ fn main() -> anyhow::Result<()> {
             _ws_client = start_websocket_client(
                 camera.clone(),
                 lamp_pin,
+                saved_camera_settings.framerate,
                 nvs_default_partition.clone(),
                 setup_details,
             )?;
@@ -556,25 +567,41 @@ fn get_camera_settings(
     )?;
 
     let mut flashlight_enabled_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+    let mut framerate_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+    let mut resolution_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
 
     info!("Getting raw camera settings data");
     nvs.get_raw(
         CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED,
         &mut flashlight_enabled_buffer,
     )?;
+    nvs.get_raw(CAMERA_SETTINGS_KEY_FRAMERATE, &mut framerate_buffer)?;
+    nvs.get_raw(CAMERA_SETTINGS_KEY_RESOLUTION, &mut resolution_buffer)?;
 
-    // TODO: resolution and framerate
     info!("Converting raw camera settings data to strings");
     let flashlight_enabled: bool = std::str::from_utf8(&flashlight_enabled_buffer)?
         .trim()
         .trim_matches(char::from(0))
         .parse()
         .unwrap_or(false);
+    let framerate: i64 = std::str::from_utf8(&framerate_buffer)?
+        .trim()
+        .trim_matches(char::from(0))
+        .parse()
+        .unwrap_or(1);
+    let mut resolution: String = std::str::from_utf8(&resolution_buffer)?
+        .trim()
+        .trim_matches(char::from(0))
+        .to_string();
+
+    if !VALID_RESOLUTIONS.contains(&resolution.as_str()) {
+        resolution = DEFAULT_RESOLUTION_STR.to_string();
+    }
 
     Ok(CameraSettingNoMeta {
         flashlight_enabled,
-        resolution: String::new(),
-        framerate: -1,
+        resolution,
+        framerate,
     })
 }
 
@@ -589,7 +616,6 @@ fn save_camera_settings(
         true,
     )?;
 
-    // TODO: resolution and framerate
     info!("Setting raw camera settings data");
     nvs.set_raw(
         CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED,
@@ -599,6 +625,14 @@ fn save_camera_settings(
             "false"
         })
         .as_bytes(),
+    )?;
+    nvs.set_raw(
+        CAMERA_SETTINGS_KEY_FRAMERATE,
+        setting.framerate.to_string().as_bytes(),
+    )?;
+    nvs.set_raw(
+        CAMERA_SETTINGS_KEY_RESOLUTION,
+        setting.resolution.as_bytes(),
     )?;
 
     Ok(())
@@ -618,6 +652,8 @@ fn clear_camera_settings(
 
     info!("Setting raw camera settings data");
     nvs.set_raw(CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED, &empty)?;
+    nvs.set_raw(CAMERA_SETTINGS_KEY_FRAMERATE, &empty)?;
+    nvs.set_raw(CAMERA_SETTINGS_KEY_RESOLUTION, &empty)?;
 
     Ok(())
 }
@@ -647,7 +683,7 @@ fn apply_camera_settings(
         }
     }
 
-    // TODO: resolution and framerate
+    // ? Maybe handle resolution and framerate here
 
     Ok(())
 }
@@ -704,6 +740,7 @@ fn dns_server_task() -> anyhow::Result<()> {
 fn start_websocket_client(
     camera: Arc<Mutex<Camera<'static>>>,
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    framerate: i64,
     nvs_default_partition: EspNvsPartition<NvsDefault>,
     form: FormData,
 ) -> anyhow::Result<WebSocketClient> {
@@ -712,7 +749,9 @@ fn start_websocket_client(
 
     let thread_handle = std::thread::Builder::new()
         .name("websocket_client".to_string())
-        .spawn(move || websocket_client_task(camera, lamp_pin, nvs_default_partition, form))?;
+        .spawn(move || {
+            websocket_client_task(camera, lamp_pin, framerate, nvs_default_partition, form)
+        })?;
 
     let websocket_client = WebSocketClient {
         thread_handle: Some(thread_handle),
@@ -739,6 +778,7 @@ impl Drop for WebSocketClient {
 fn websocket_client_task(
     camera: Arc<Mutex<Camera<'static>>>,
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    framerate: i64,
     nvs_default_partition: EspNvsPartition<NvsDefault>,
     form: FormData,
 ) -> anyhow::Result<()> {
@@ -766,12 +806,17 @@ fn websocket_client_task(
             CAMERA_ANY_PORT_INDICATOR_TEXT.as_bytes(),
         )?;
 
+        // TODO: Lower interval based on average time taken to capture, or maybe use a more accurate timer on a separate thread and a channel?
+        #[allow(clippy::cast_sign_loss)]
+        let framerate_u64: u64 = if framerate < 1 { 1 } else { framerate as u64 };
+        let ws_capture_interval = Duration::from_millis(1000 / (framerate_u64));
+
         loop {
             info!(
                 "Sleeping for {}ms before next capture",
-                WS_CAPTURE_INTERVAL.as_millis()
+                ws_capture_interval.as_millis()
             );
-            async_timer.after(WS_CAPTURE_INTERVAL).await?;
+            async_timer.after(ws_capture_interval).await?;
 
             let camera_lock = camera
                 .lock()
@@ -811,16 +856,23 @@ fn handle_event(
 
         info!("Received WebSocket camera_message: {:#?}", camera_message);
 
-        if let CameraMessage::SettingChanged(setting) = camera_message {
+        if let CameraMessage::SettingChanged(ref setting) = camera_message {
             info!("Received WebSocket setting change: {:#?}", setting);
 
-            apply_camera_settings(lamp_pin, &setting).unwrap_or_else(|e| {
+            apply_camera_settings(lamp_pin, setting).unwrap_or_else(|e| {
                 error!("Failed to apply camera settings: {:#?}", e);
             });
 
-            save_camera_settings(nvs_default_partition, &setting).unwrap_or_else(|e| {
+            save_camera_settings(nvs_default_partition, setting).unwrap_or_else(|e| {
                 error!("Failed to save camera settings: {:#?}", e);
             });
+        }
+
+        #[allow(clippy::equatable_if_let)] // Makes code more readable
+        if let CameraMessage::Restart = camera_message {
+            info!("Received WebSocket restart message, restarting...");
+            // TODO: Restart device after a delay
+            esp_idf_svc::hal::reset::restart();
         }
     }
 }

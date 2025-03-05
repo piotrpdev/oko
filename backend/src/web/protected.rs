@@ -36,6 +36,10 @@ pub fn router(api_channel: watch::Sender<ApiChannelMessage>) -> Router<()> {
             "/api/settings/:setting_id",
             patch(self::patch::camera_settings),
         )
+        .route(
+            "/api/cameras/:camera_id/restart",
+            post(self::post::camera_restart),
+        )
         .with_state(api_channel)
 }
 
@@ -221,10 +225,13 @@ mod get {
 
 mod post {
     use super::{AuthSession, IntoResponse, StatusCode};
+    use crate::ApiChannelMessage;
     use crate::{Camera, CameraPermission, CameraSetting, Model};
+    use axum::extract::{Path, State};
     use axum::Form;
     use axum::Json;
     use serde::Deserialize;
+    use tokio::sync::watch;
 
     #[derive(Debug, Clone, Deserialize)]
     pub struct AddCameraForm {
@@ -260,7 +267,7 @@ mod post {
                     setting_id: CameraSetting::DEFAULT.setting_id,
                     camera_id: camera.camera_id,
                     flashlight_enabled: CameraSetting::DEFAULT.flashlight_enabled,
-                    resolution: "800x600".to_string(),
+                    resolution: "SVGA".to_string(),
                     framerate: 5,
                     last_modified: CameraSetting::DEFAULT.last_modified(),
                     modified_by: Some(user.user_id),
@@ -291,6 +298,32 @@ mod post {
                 }
 
                 Json(camera).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+
+    pub async fn camera_restart(
+        auth_session: AuthSession,
+        Path(camera_id): Path<i64>,
+        state: State<watch::Sender<ApiChannelMessage>>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                let api_message = ApiChannelMessage::CameraRelated {
+                    camera_id,
+                    message: crate::web::CameraMessage::Restart,
+                };
+
+                if state.send(api_message).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                StatusCode::OK.into_response()
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
@@ -352,8 +385,8 @@ mod patch {
     #[derive(Debug, Clone, Deserialize)]
     pub struct UpdateSettingsForm {
         pub flashlight_enabled: bool,
-        // pub resolution: String,
-        // pub framerate: i64
+        pub resolution: String,
+        pub framerate: i64,
     }
 
     pub async fn camera_settings(
@@ -384,10 +417,23 @@ mod patch {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
-                // TODO: Update resolution and framerate
+                // TODO: resolution
                 setting.flashlight_enabled = settings_form.flashlight_enabled;
-                // setting.resolution = settings_form.resolution;
-                // setting.framerate = settings_form.framerate;
+
+                // ? Maybe allow any framerate/resolution for admin but give warning
+                if user.username == "admin" {
+                    if (settings_form.framerate < 1) || (settings_form.framerate > 60) {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    }
+
+                    if !["SVGA", "VGA"].contains(&settings_form.resolution.as_str()) {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    }
+
+                    setting.resolution = settings_form.resolution;
+                    setting.framerate = settings_form.framerate;
+                }
+
                 setting.last_modified = CameraSetting::DEFAULT.last_modified();
                 setting.modified_by = Some(user.user_id);
 

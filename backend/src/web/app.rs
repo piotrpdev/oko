@@ -259,6 +259,7 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, state, auth_session))
 }
 
+// ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
 // TODO: Find out if ECONNRESET after a while of no messages only affects vite dev server or if it is a general issue
 // ? Using tick await for empty tasks might not be the best idea
 /// Actual websocket statemachine (one will be spawned per connection)
@@ -369,11 +370,14 @@ async fn handle_socket(
         cameras = i_cameras;
     }
 
+    let initial_camera_settings_clone = initial_camera_settings.clone();
+
     // ? Maybe use spawn_blocking here, be aware .abort() is not available on blocking tasks
     // ? Maybe assume is camera if IP belongs to camera in DB
     // TODO: Handle stopping recording properly
     // TODO: Inform client/db if recording fails
     // TODO: Find out which is better, ingesting encoded or decoded images
+    // ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
     let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if is_camera {
             // TODO: Check if errors are returned properly here, had some issues with the ? operator being silent
@@ -396,16 +400,38 @@ async fn handle_socket(
                 // ? Maybe don't create video until first frame (or maybe doing this is actually a good approach)?
                 video.create_using_self(&auth_session.backend.db).await?;
 
+                let (frame_width, frame_height, framerate) = match initial_camera_settings_clone {
+                    #[allow(clippy::match_same_arms)] // readability
+                    Some(settings) => {
+                        let (frame_width, frame_height) = match settings.resolution.as_str() {
+                            "SVGA" => (800, 600),
+                            "VGA" => (640, 480),
+                            _ => (800, 600),
+                        };
+
+                        (frame_width, frame_height, settings.framerate)
+                    }
+                    None => (800, 600, 12),
+                };
+
                 // TODO: Don't hardcode these
                 let video_fourcc = VideoWriter::fourcc('m', 'p', '4', 'v')?;
-                let video_size = Size::new(800, 600);
-                let mut video_writer =
-                    VideoWriter::new_def(&video.file_path, video_fourcc, 12.5, video_size)?;
+                let video_size = Size::new(frame_width, frame_height);
+                // TODO: Investigate why video is too fast
+                #[allow(clippy::cast_precision_loss)] // the precision loss is acceptable
+                let mut video_writer = VideoWriter::new_def(
+                    &video.file_path,
+                    video_fourcc,
+                    framerate as f64,
+                    video_size,
+                )?;
 
                 let mut total_bytes = 0;
 
                 let mut first_received = false;
                 // TODO: Adding a sleep might be a good idea?
+                // ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
+                // TODO: Handle if user changes resolution/framerate during recording (this is likely to happen)
                 loop {
                     // TODO: this might not be the best way of doing this
                     let message = (*images_rx_rec.borrow_and_update()).clone();

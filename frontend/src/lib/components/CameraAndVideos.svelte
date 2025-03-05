@@ -53,6 +53,9 @@
         const bytes = new Uint8Array(parsed_msg.image_bytes);
         const blob = new Blob([bytes], { type: "image/jpeg" });
         const url = URL.createObjectURL(blob);
+        if (imgSrc !== "") {
+          URL.revokeObjectURL(imgSrc);
+        }
         imgSrc = url;
       }
     } catch (e) {
@@ -114,6 +117,7 @@
           <!-- TODO: Use skeletons -->
           <span class="px-3 py-0 text-muted-foreground">Loading...</span>
         {:then videos}
+          <!-- TODO: Sort by creation date -->
           {#each videos as video}
             <Table.Row data-video-id={video.video_id}>
               <Table.Cell class="font-semibold"

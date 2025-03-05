@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(returned_setting.setting_id, setting_id);
         assert_eq!(returned_setting.camera_id, 1);
         assert!(!returned_setting.flashlight_enabled);
-        assert_eq!(returned_setting.resolution, "800x600");
+        assert_eq!(returned_setting.resolution, "SVGA");
         assert_eq!(returned_setting.framerate, 5);
         assert_eq!(
             returned_setting.last_modified,
