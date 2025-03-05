@@ -267,7 +267,7 @@ mod post {
                     setting_id: CameraSetting::DEFAULT.setting_id,
                     camera_id: camera.camera_id,
                     flashlight_enabled: CameraSetting::DEFAULT.flashlight_enabled,
-                    resolution: "800x600".to_string(),
+                    resolution: "SVGA".to_string(),
                     framerate: 5,
                     last_modified: CameraSetting::DEFAULT.last_modified(),
                     modified_by: Some(user.user_id),

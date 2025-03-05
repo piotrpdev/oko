@@ -849,7 +849,7 @@ async fn camera_setting_updates(
     assert_eq!(camera_setting.camera_id, 2);
     assert_eq!(camera_setting.setting_id, 2);
     assert!(!camera_setting.flashlight_enabled);
-    assert_eq!(camera_setting.resolution, "800x600");
+    assert_eq!(camera_setting.resolution, "SVGA");
     assert_eq!(camera_setting.framerate, 5);
     assert_eq!(camera_setting.modified_by, Some(2));
     assert_eq!(
@@ -898,7 +898,7 @@ async fn camera_setting_updates(
     assert_eq!(updated_camera_setting.camera_id, 2);
     assert_eq!(updated_camera_setting.setting_id, 2);
     assert!(updated_camera_setting.flashlight_enabled);
-    assert_eq!(updated_camera_setting.resolution, "800x600");
+    assert_eq!(updated_camera_setting.resolution, "SVGA");
     assert_eq!(updated_camera_setting.framerate, 5);
     assert_eq!(updated_camera_setting.modified_by, Some(1));
     assert!(updated_camera_setting.last_modified > camera_setting.last_modified);
