@@ -369,6 +369,8 @@ async fn handle_socket(
         cameras = i_cameras;
     }
 
+    let initial_camera_settings_clone = initial_camera_settings.clone();
+
     // ? Maybe use spawn_blocking here, be aware .abort() is not available on blocking tasks
     // ? Maybe assume is camera if IP belongs to camera in DB
     // TODO: Handle stopping recording properly
@@ -396,11 +398,31 @@ async fn handle_socket(
                 // ? Maybe don't create video until first frame (or maybe doing this is actually a good approach)?
                 video.create_using_self(&auth_session.backend.db).await?;
 
+                let (frame_width, frame_height, framerate) = match initial_camera_settings_clone {
+                    #[allow(clippy::match_same_arms)] // readability
+                    Some(settings) => {
+                        let (frame_width, frame_height) = match settings.resolution.as_str() {
+                            "SVGA" => (800, 600),
+                            "VGA" => (640, 480),
+                            _ => (800, 600),
+                        };
+
+                        (frame_width, frame_height, settings.framerate)
+                    }
+                    None => (800, 600, 12),
+                };
+
                 // TODO: Don't hardcode these
                 let video_fourcc = VideoWriter::fourcc('m', 'p', '4', 'v')?;
-                let video_size = Size::new(800, 600);
-                let mut video_writer =
-                    VideoWriter::new_def(&video.file_path, video_fourcc, 12.5, video_size)?;
+                let video_size = Size::new(frame_width, frame_height);
+                // TODO: Investigate why video is too fast
+                #[allow(clippy::cast_precision_loss)] // the precision loss is acceptable
+                let mut video_writer = VideoWriter::new_def(
+                    &video.file_path,
+                    video_fourcc,
+                    framerate as f64,
+                    video_size,
+                )?;
 
                 let mut total_bytes = 0;
 

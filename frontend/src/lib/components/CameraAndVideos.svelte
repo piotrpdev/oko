@@ -117,6 +117,7 @@
           <!-- TODO: Use skeletons -->
           <span class="px-3 py-0 text-muted-foreground">Loading...</span>
         {:then videos}
+          <!-- TODO: Sort by creation date -->
           {#each videos as video}
             <Table.Row data-video-id={video.video_id}>
               <Table.Cell class="font-semibold"
