@@ -227,6 +227,18 @@
       console.error("Save Settings failed");
     }
   }
+
+  async function handleRestartCamera(cameraId: number) {
+    const response = await fetch(`/api/cameras/${cameraId}/restart`, {
+      method: "POST",
+    });
+
+    if (response.ok) {
+      refreshSettings(cameraId);
+    } else {
+      console.error("Restart Camera failed");
+    }
+  }
 </script>
 
 <DashboardLayout tab="Cameras">
@@ -348,7 +360,7 @@
                         {/await}
                       </div>
                       <Separator class="my-2" />
-                      <div class="grid gap-4 pb-4">
+                      <div class="grid gap-4">
                         <h4 class="text-sm font-medium">Settings</h4>
                         {#await getSettingsPromise}
                           <!-- TODO: Use skeletons -->
@@ -402,6 +414,7 @@
                                 />
                               </div>
                             {/if}
+                            <Separator class="h-0" />
                             <Button
                               id="save-settings"
                               variant="outline"
@@ -409,6 +422,18 @@
                               type="submit">Save Settings</Button
                             >
                           </form>
+                          {#if $user?.user?.username === "admin"}
+                            <Button
+                              id="restart-camera"
+                              variant="destructive"
+                              class="w-full"
+                              type="button"
+                              on:click={() =>
+                                handleRestartCamera(camera.camera_id)}
+                            >
+                              Restart Camera
+                            </Button>
+                          {/if}
                         {:catch error}
                           <p>{error.message}</p>
                         {/await}

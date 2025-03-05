@@ -36,6 +36,10 @@ pub fn router(api_channel: watch::Sender<ApiChannelMessage>) -> Router<()> {
             "/api/settings/:setting_id",
             patch(self::patch::camera_settings),
         )
+        .route(
+            "/api/cameras/:camera_id/restart",
+            post(self::post::camera_restart),
+        )
         .with_state(api_channel)
 }
 
@@ -221,10 +225,13 @@ mod get {
 
 mod post {
     use super::{AuthSession, IntoResponse, StatusCode};
+    use crate::ApiChannelMessage;
     use crate::{Camera, CameraPermission, CameraSetting, Model};
+    use axum::extract::{Path, State};
     use axum::Form;
     use axum::Json;
     use serde::Deserialize;
+    use tokio::sync::watch;
 
     #[derive(Debug, Clone, Deserialize)]
     pub struct AddCameraForm {
@@ -291,6 +298,32 @@ mod post {
                 }
 
                 Json(camera).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+
+    pub async fn camera_restart(
+        auth_session: AuthSession,
+        Path(camera_id): Path<i64>,
+        state: State<watch::Sender<ApiChannelMessage>>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                let api_message = ApiChannelMessage::CameraRelated {
+                    camera_id,
+                    message: crate::web::CameraMessage::Restart,
+                };
+
+                if state.send(api_message).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                StatusCode::OK.into_response()
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
         }

@@ -836,16 +836,23 @@ fn handle_event(
 
         info!("Received WebSocket camera_message: {:#?}", camera_message);
 
-        if let CameraMessage::SettingChanged(setting) = camera_message {
+        if let CameraMessage::SettingChanged(ref setting) = camera_message {
             info!("Received WebSocket setting change: {:#?}", setting);
 
-            apply_camera_settings(lamp_pin, &setting).unwrap_or_else(|e| {
+            apply_camera_settings(lamp_pin, setting).unwrap_or_else(|e| {
                 error!("Failed to apply camera settings: {:#?}", e);
             });
 
-            save_camera_settings(nvs_default_partition, &setting).unwrap_or_else(|e| {
+            save_camera_settings(nvs_default_partition, setting).unwrap_or_else(|e| {
                 error!("Failed to save camera settings: {:#?}", e);
             });
+        }
+
+        #[allow(clippy::equatable_if_let)] // Makes code more readable
+        if let CameraMessage::Restart = camera_message {
+            info!("Received WebSocket restart message, restarting...");
+            // TODO: Restart device after a delay
+            esp_idf_svc::hal::reset::restart();
         }
     }
 }
