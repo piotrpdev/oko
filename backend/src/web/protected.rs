@@ -385,7 +385,7 @@ mod patch {
     #[derive(Debug, Clone, Deserialize)]
     pub struct UpdateSettingsForm {
         pub flashlight_enabled: bool,
-        // pub resolution: String,
+        pub resolution: String,
         pub framerate: i64,
     }
 
@@ -426,7 +426,11 @@ mod patch {
                         return StatusCode::BAD_REQUEST.into_response();
                     }
 
-                    // setting.resolution = settings_form.resolution;
+                    if !["SVGA", "VGA"].contains(&settings_form.resolution.as_str()) {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    }
+
+                    setting.resolution = settings_form.resolution;
                     setting.framerate = settings_form.framerate;
                 }
 

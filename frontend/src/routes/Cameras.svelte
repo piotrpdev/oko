@@ -172,6 +172,17 @@
     refreshPermissions(permission.camera_id);
   }
 
+  let cameraResolutionOptions = [
+    {
+      value: "SVGA",
+      label: "SVGA",
+    },
+    {
+      value: "VGA",
+      label: "VGA",
+    },
+  ];
+
   let getSettingsPromise: Promise<CameraSetting> = Promise.resolve({
     camera_id: -1,
     flashlight_enabled: false,
@@ -203,6 +214,8 @@
     getSettingsPromise = getSettings(cameraId);
   }
 
+  let selectedResolution: string | undefined;
+
   async function onSaveSettings({ target }: Event, setting: CameraSetting) {
     const formData = new FormData(target as HTMLFormElement);
 
@@ -210,6 +223,9 @@
     let data = {
       ...setting,
       flashlight_enabled: "false",
+      ...(selectedResolution !== undefined
+        ? { resolution: selectedResolution }
+        : {}),
       ...Object.fromEntries(formData.entries()),
     };
 
@@ -412,6 +428,50 @@
                                   placeholder="5"
                                   value={settings.framerate}
                                 />
+                              </div>
+                              <div
+                                class="flex items-center justify-between space-x-2"
+                              >
+                                <Label for="framerate" class="flex flex-col">
+                                  <span class="font-normal">Resolution</span>
+                                  <span
+                                    class="text-xs font-normal leading-snug text-muted-foreground"
+                                  >
+                                    requires camera restart
+                                  </span>
+                                </Label>
+                                <Select.Root
+                                  selected={cameraResolutionOptions.find(
+                                    (option) =>
+                                      option.label === settings.resolution,
+                                  )}
+                                  onSelectedChange={(selected) =>
+                                    selected &&
+                                    (selectedResolution = selected.value)}
+                                >
+                                  <Select.Trigger
+                                    aria-label="Edit Camera Resolution"
+                                    data-permission-id={settings.setting_id}
+                                    class="w-[120px]"
+                                  >
+                                    <Select.Value
+                                      aria-label="Current Camera Resolution"
+                                      data-permission-id={settings.setting_id}
+                                      placeholder="Resolution"
+                                    />
+                                  </Select.Trigger>
+                                  <Select.Content>
+                                    <Select.Group>
+                                      {#each cameraResolutionOptions as cameraResolution}
+                                        <Select.Item
+                                          value={cameraResolution.value}
+                                          label={cameraResolution.label}
+                                          >{cameraResolution.label}</Select.Item
+                                        >
+                                      {/each}
+                                    </Select.Group>
+                                  </Select.Content>
+                                </Select.Root>
                               </div>
                             {/if}
                             <Separator class="h-0" />

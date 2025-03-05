@@ -43,6 +43,8 @@ use serde::Deserialize;
 // TODO: Serialize before storing to NVS instead of storing raw bytes
 
 const NVS_MAX_STR_LEN: usize = 100;
+const DEFAULT_RESOLUTION_STR: &str = "SVGA";
+const VALID_RESOLUTIONS: [&str; 2] = [DEFAULT_RESOLUTION_STR, "VGA"];
 
 const PREFERENCES_RESET_LIGHT_DURATION: Duration = Duration::from_millis(1000);
 const PREFERENCES_NAMESPACE: &str = "preferences";
@@ -53,6 +55,7 @@ const PREFERENCES_KEY_OKO: &str = "oko";
 const CAMERA_SETTINGS_NAMESPACE: &str = "cam_settings";
 const CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED: &str = "flash_enabled";
 const CAMERA_SETTINGS_KEY_FRAMERATE: &str = "framerate";
+const CAMERA_SETTINGS_KEY_RESOLUTION: &str = "resolution";
 
 const VFS_MAX_FDS: usize = 5;
 
@@ -143,6 +146,12 @@ fn main() -> anyhow::Result<()> {
 
         apply_camera_settings(&lamp_pin, &saved_camera_settings)?;
 
+        let frame_size = match saved_camera_settings.resolution.as_str() {
+            "VGA" => camera::framesize_t_FRAMESIZE_VGA,
+            "SVGA" => camera::framesize_t_FRAMESIZE_SVGA,
+            _ => CAMERA_DEFAULT_FRAME_SIZE,
+        };
+
         info!("Initializing camera");
         let cam = Camera::new(
             peripherals.pins.gpio32,
@@ -164,7 +173,7 @@ fn main() -> anyhow::Result<()> {
             CAMERA_DEFAULT_JPG_QUALITY,
             CAMERA_DEFAULT_FB_COUNT,
             CAMERA_DEFAULT_GRAB_MODE,
-            CAMERA_DEFAULT_FRAME_SIZE,
+            frame_size,
         )?;
         // ? Maybe use parking_lot instead of std::sync
         let camera: Arc<Mutex<Camera<'_>>> = Arc::new(Mutex::new(cam));
@@ -558,6 +567,7 @@ fn get_camera_settings(
 
     let mut flashlight_enabled_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
     let mut framerate_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+    let mut resolution_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
 
     info!("Getting raw camera settings data");
     nvs.get_raw(
@@ -565,24 +575,31 @@ fn get_camera_settings(
         &mut flashlight_enabled_buffer,
     )?;
     nvs.get_raw(CAMERA_SETTINGS_KEY_FRAMERATE, &mut framerate_buffer)?;
+    nvs.get_raw(CAMERA_SETTINGS_KEY_RESOLUTION, &mut resolution_buffer)?;
 
-    // TODO: resolution
     info!("Converting raw camera settings data to strings");
     let flashlight_enabled: bool = std::str::from_utf8(&flashlight_enabled_buffer)?
         .trim()
         .trim_matches(char::from(0))
         .parse()
         .unwrap_or(false);
-
     let framerate: i64 = std::str::from_utf8(&framerate_buffer)?
         .trim()
         .trim_matches(char::from(0))
         .parse()
         .unwrap_or(1);
+    let mut resolution: String = std::str::from_utf8(&resolution_buffer)?
+        .trim()
+        .trim_matches(char::from(0))
+        .to_string();
+
+    if !VALID_RESOLUTIONS.contains(&resolution.as_str()) {
+        resolution = DEFAULT_RESOLUTION_STR.to_string();
+    }
 
     Ok(CameraSettingNoMeta {
         flashlight_enabled,
-        resolution: String::new(),
+        resolution,
         framerate,
     })
 }
@@ -598,7 +615,6 @@ fn save_camera_settings(
         true,
     )?;
 
-    // TODO: resolution
     info!("Setting raw camera settings data");
     nvs.set_raw(
         CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED,
@@ -612,6 +628,10 @@ fn save_camera_settings(
     nvs.set_raw(
         CAMERA_SETTINGS_KEY_FRAMERATE,
         setting.framerate.to_string().as_bytes(),
+    )?;
+    nvs.set_raw(
+        CAMERA_SETTINGS_KEY_RESOLUTION,
+        setting.resolution.as_bytes(),
     )?;
 
     Ok(())
@@ -632,8 +652,7 @@ fn clear_camera_settings(
     info!("Setting raw camera settings data");
     nvs.set_raw(CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED, &empty)?;
     nvs.set_raw(CAMERA_SETTINGS_KEY_FRAMERATE, &empty)?;
-
-    // TODO: resolution
+    nvs.set_raw(CAMERA_SETTINGS_KEY_RESOLUTION, &empty)?;
 
     Ok(())
 }
