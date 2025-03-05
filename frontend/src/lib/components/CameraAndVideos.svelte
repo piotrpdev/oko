@@ -53,6 +53,9 @@
         const bytes = new Uint8Array(parsed_msg.image_bytes);
         const blob = new Blob([bytes], { type: "image/jpeg" });
         const url = URL.createObjectURL(blob);
+        if (imgSrc !== "") {
+          URL.revokeObjectURL(imgSrc);
+        }
         imgSrc = url;
       }
     } catch (e) {
