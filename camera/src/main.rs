@@ -41,6 +41,7 @@ use serde::Deserialize;
 // TODO: Make messages/strings consistent
 // TODO: Make pins easier to configure
 // TODO: Serialize before storing to NVS instead of storing raw bytes
+// TODO: Optimize CLK frequency and JPEG quality
 
 const NVS_MAX_STR_LEN: usize = 100;
 const DEFAULT_RESOLUTION_STR: &str = "SVGA";
