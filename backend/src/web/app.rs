@@ -259,6 +259,7 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, state, auth_session))
 }
 
+// ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
 // TODO: Find out if ECONNRESET after a while of no messages only affects vite dev server or if it is a general issue
 // ? Using tick await for empty tasks might not be the best idea
 /// Actual websocket statemachine (one will be spawned per connection)
@@ -376,6 +377,7 @@ async fn handle_socket(
     // TODO: Handle stopping recording properly
     // TODO: Inform client/db if recording fails
     // TODO: Find out which is better, ingesting encoded or decoded images
+    // ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
     let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if is_camera {
             // TODO: Check if errors are returned properly here, had some issues with the ? operator being silent
@@ -428,6 +430,8 @@ async fn handle_socket(
 
                 let mut first_received = false;
                 // TODO: Adding a sleep might be a good idea?
+                // ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
+                // TODO: Handle if user changes resolution/framerate during recording (this is likely to happen)
                 loop {
                     // TODO: this might not be the best way of doing this
                     let message = (*images_rx_rec.borrow_and_update()).clone();
