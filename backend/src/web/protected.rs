@@ -353,7 +353,7 @@ mod patch {
     pub struct UpdateSettingsForm {
         pub flashlight_enabled: bool,
         // pub resolution: String,
-        // pub framerate: i64
+        pub framerate: i64,
     }
 
     pub async fn camera_settings(
@@ -384,10 +384,19 @@ mod patch {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
-                // TODO: Update resolution and framerate
+                // TODO: resolution
                 setting.flashlight_enabled = settings_form.flashlight_enabled;
-                // setting.resolution = settings_form.resolution;
-                // setting.framerate = settings_form.framerate;
+
+                // ? Maybe allow any framerate/resolution for admin but give warning
+                if user.username == "admin" {
+                    if (settings_form.framerate < 1) || (settings_form.framerate > 60) {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    }
+
+                    // setting.resolution = settings_form.resolution;
+                    setting.framerate = settings_form.framerate;
+                }
+
                 setting.last_modified = CameraSetting::DEFAULT.last_modified();
                 setting.modified_by = Some(user.user_id);
 

@@ -375,6 +375,33 @@
                                 checked={settings.flashlight_enabled}
                               />
                             </div>
+                            {#if $user?.user?.username === "admin"}
+                              <div
+                                class="flex items-center justify-between space-x-2"
+                              >
+                                <Label for="framerate" class="flex flex-col">
+                                  <span class="font-normal"
+                                    >Framerate (FPS)</span
+                                  >
+                                  <span
+                                    class="text-xs font-normal leading-snug text-muted-foreground"
+                                  >
+                                    requires camera restart
+                                  </span>
+                                </Label>
+                                <Input
+                                  class="w-[4.5rem]"
+                                  id="framerate"
+                                  type="number"
+                                  name="framerate"
+                                  min={1}
+                                  max={60}
+                                  required
+                                  placeholder="5"
+                                  value={settings.framerate}
+                                />
+                              </div>
+                            {/if}
                             <Button
                               id="save-settings"
                               variant="outline"

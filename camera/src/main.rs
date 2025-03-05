@@ -52,6 +52,7 @@ const PREFERENCES_KEY_OKO: &str = "oko";
 
 const CAMERA_SETTINGS_NAMESPACE: &str = "cam_settings";
 const CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED: &str = "flash_enabled";
+const CAMERA_SETTINGS_KEY_FRAMERATE: &str = "framerate";
 
 const VFS_MAX_FDS: usize = 5;
 
@@ -66,7 +67,6 @@ const AP_SETUP_HTML: &str = include_str!("setup.html");
 const AP_MAX_PAYLOAD_LEN: u64 = 256;
 
 const WS_TIMEOUT: Duration = Duration::from_secs(10);
-const WS_CAPTURE_INTERVAL: Duration = Duration::from_millis(5000);
 
 const CAMERA_ANY_PORT_INDICATOR_TEXT: &str = "camera_any_port";
 const CAMERA_DEFAULT_XCLK_FREQ: i32 = 8 * 1_000_000;
@@ -202,6 +202,7 @@ fn main() -> anyhow::Result<()> {
             _ws_client = start_websocket_client(
                 camera.clone(),
                 lamp_pin,
+                saved_camera_settings.framerate,
                 nvs_default_partition.clone(),
                 setup_details,
             )?;
@@ -556,14 +557,16 @@ fn get_camera_settings(
     )?;
 
     let mut flashlight_enabled_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
+    let mut framerate_buffer: [u8; NVS_MAX_STR_LEN] = [0; NVS_MAX_STR_LEN];
 
     info!("Getting raw camera settings data");
     nvs.get_raw(
         CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED,
         &mut flashlight_enabled_buffer,
     )?;
+    nvs.get_raw(CAMERA_SETTINGS_KEY_FRAMERATE, &mut framerate_buffer)?;
 
-    // TODO: resolution and framerate
+    // TODO: resolution
     info!("Converting raw camera settings data to strings");
     let flashlight_enabled: bool = std::str::from_utf8(&flashlight_enabled_buffer)?
         .trim()
@@ -571,10 +574,16 @@ fn get_camera_settings(
         .parse()
         .unwrap_or(false);
 
+    let framerate: i64 = std::str::from_utf8(&framerate_buffer)?
+        .trim()
+        .trim_matches(char::from(0))
+        .parse()
+        .unwrap_or(1);
+
     Ok(CameraSettingNoMeta {
         flashlight_enabled,
         resolution: String::new(),
-        framerate: -1,
+        framerate,
     })
 }
 
@@ -589,7 +598,7 @@ fn save_camera_settings(
         true,
     )?;
 
-    // TODO: resolution and framerate
+    // TODO: resolution
     info!("Setting raw camera settings data");
     nvs.set_raw(
         CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED,
@@ -599,6 +608,10 @@ fn save_camera_settings(
             "false"
         })
         .as_bytes(),
+    )?;
+    nvs.set_raw(
+        CAMERA_SETTINGS_KEY_FRAMERATE,
+        setting.framerate.to_string().as_bytes(),
     )?;
 
     Ok(())
@@ -618,6 +631,9 @@ fn clear_camera_settings(
 
     info!("Setting raw camera settings data");
     nvs.set_raw(CAMERA_SETTINGS_KEY_FLASHLIGHT_ENABLED, &empty)?;
+    nvs.set_raw(CAMERA_SETTINGS_KEY_FRAMERATE, &empty)?;
+
+    // TODO: resolution
 
     Ok(())
 }
@@ -647,7 +663,7 @@ fn apply_camera_settings(
         }
     }
 
-    // TODO: resolution and framerate
+    // ? Maybe handle resolution and framerate here
 
     Ok(())
 }
@@ -704,6 +720,7 @@ fn dns_server_task() -> anyhow::Result<()> {
 fn start_websocket_client(
     camera: Arc<Mutex<Camera<'static>>>,
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    framerate: i64,
     nvs_default_partition: EspNvsPartition<NvsDefault>,
     form: FormData,
 ) -> anyhow::Result<WebSocketClient> {
@@ -712,7 +729,9 @@ fn start_websocket_client(
 
     let thread_handle = std::thread::Builder::new()
         .name("websocket_client".to_string())
-        .spawn(move || websocket_client_task(camera, lamp_pin, nvs_default_partition, form))?;
+        .spawn(move || {
+            websocket_client_task(camera, lamp_pin, framerate, nvs_default_partition, form)
+        })?;
 
     let websocket_client = WebSocketClient {
         thread_handle: Some(thread_handle),
@@ -739,6 +758,7 @@ impl Drop for WebSocketClient {
 fn websocket_client_task(
     camera: Arc<Mutex<Camera<'static>>>,
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
+    framerate: i64,
     nvs_default_partition: EspNvsPartition<NvsDefault>,
     form: FormData,
 ) -> anyhow::Result<()> {
@@ -766,12 +786,17 @@ fn websocket_client_task(
             CAMERA_ANY_PORT_INDICATOR_TEXT.as_bytes(),
         )?;
 
+        // TODO: Lower interval based on average time taken to capture, or maybe use a more accurate timer on a separate thread and a channel?
+        #[allow(clippy::cast_sign_loss)]
+        let framerate_u64: u64 = if framerate < 1 { 1 } else { framerate as u64 };
+        let ws_capture_interval = Duration::from_millis(1000 / (framerate_u64));
+
         loop {
             info!(
                 "Sleeping for {}ms before next capture",
-                WS_CAPTURE_INTERVAL.as_millis()
+                ws_capture_interval.as_millis()
             );
-            async_timer.after(WS_CAPTURE_INTERVAL).await?;
+            async_timer.after(ws_capture_interval).await?;
 
             let camera_lock = camera
                 .lock()
