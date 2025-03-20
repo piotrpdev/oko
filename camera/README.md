@@ -24,6 +24,10 @@
 
 ## Build and Flash/Run
 
+> [!NOTE]
+> The baud rate is set to `921600` in [`espflash.toml`](./espflash.toml), try
+> lowering this value to `115200` if you're experiencing flashing issues.
+
 ```bash
 source ~/export-esp.sh # Needed to download components in "components_esp32.lock"
 cargo build
