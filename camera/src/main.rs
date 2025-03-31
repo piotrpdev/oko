@@ -42,6 +42,8 @@ use serde::Deserialize;
 // TODO: Make pins easier to configure
 // TODO: Serialize before storing to NVS instead of storing raw bytes
 // TODO: Optimize CLK frequency and JPEG quality
+// TODO: Provide endpoint with ESP32 real time stats
+// TODO: Remove unnecessary async/block_on just use sync
 
 const NVS_MAX_STR_LEN: usize = 100;
 const DEFAULT_RESOLUTION_STR: &str = "SVGA";
