@@ -18,6 +18,7 @@ use esp_idf_svc::{
     http::{server::EspHttpServer, Method},
     io::{EspIOError, Read, Write},
     ipv4,
+    mdns::EspMdns,
     netif::{EspNetif, NetifConfiguration, NetifStack},
     nvs::{EspDefaultNvsPartition, EspNvs, EspNvsPartition, NvsDefault},
     sys::camera,
@@ -222,6 +223,9 @@ fn main() -> anyhow::Result<()> {
 
         let _http_server = start_http_server(nvs_default_partition, esp_needs_setup, camera)?;
 
+        let mac = wifi.wifi().ap_netif().get_mac()?;
+        let _mdns = start_mdns(mac)?;
+
         // TODO: Wait for a signal, e.g. lost connection, instead of infinitely
         wifi.wifi_wait(|_| Ok(true), None).await?;
 
@@ -302,6 +306,29 @@ async fn start_sta(
     info!("Wi-Fi STA IP Info: {:?}", ip_info);
 
     Ok(wifi)
+}
+
+fn start_mdns(mac: [u8; 6]) -> anyhow::Result<EspMdns> {
+    let mut mdns = EspMdns::take()?;
+
+    // no need for vendor prefix
+    let mac_string = mac[3..]
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<String>>()
+        .join("-");
+
+    // sudo avahi-daemon --kill && avahi-browse -a -t --resolve --no-db-lookup
+    mdns.set_hostname(format!("oko_camera_{mac_string}"))?;
+    mdns.add_service(
+        None,
+        "_http",
+        "_tcp",
+        esp_idf_svc::http::server::Configuration::default().http_port,
+        &[],
+    )?;
+
+    Ok(mdns)
 }
 
 // ? Maybe split into two different functions for setup/no-setup
