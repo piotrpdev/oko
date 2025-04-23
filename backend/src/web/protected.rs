@@ -1,15 +1,16 @@
+use std::sync::Arc;
+
 use axum::{
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
     Router,
 };
-use tokio::sync::watch;
 
 use crate::users::AuthSession;
-use crate::ApiChannelMessage;
+use crate::web::AppState;
 
-pub fn router(api_channel: watch::Sender<ApiChannelMessage>) -> Router<()> {
+pub fn router(app_state: Arc<AppState>) -> Router<()> {
     Router::new()
         .route("/api/", get(self::get::protected))
         .route("/api/cameras", get(self::get::cameras))
@@ -40,17 +41,29 @@ pub fn router(api_channel: watch::Sender<ApiChannelMessage>) -> Router<()> {
             "/api/cameras/:camera_id/restart",
             post(self::post::camera_restart),
         )
-        .with_state(api_channel)
+        .route("/api/mdns_cameras_sse", get(self::get::mdns_cameras_sse))
+        .with_state(app_state)
 }
 
 mod get {
-    use axum::{body::Body, extract::Path, Json};
+    use std::{net::SocketAddr, sync::Arc, time::Duration};
+
+    use axum::{
+        body::Body,
+        extract::{Path, State},
+        response::{sse, Sse},
+        Json,
+    };
     use http::header;
     use serde::Serialize;
+    use tokio_stream::{wrappers::WatchStream, StreamExt};
     use tokio_util::io::ReaderStream;
+    use tracing::error;
 
     use crate::{
-        db::Camera, CameraPermission, CameraPermissionView, CameraSetting, Model, User, Video,
+        db::Camera,
+        web::{AppState, MdnsChannelMessage},
+        CameraPermission, CameraPermissionView, CameraSetting, Model, User, Video,
     };
 
     use super::{AuthSession, IntoResponse, StatusCode};
@@ -219,19 +232,82 @@ mod get {
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
+
+    #[derive(Serialize)]
+    struct MdnsService {
+        hostname: String,
+        socket_address: SocketAddr,
+    }
+
+    pub async fn mdns_cameras_sse(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                let mdns_channel_rx = state.mdns_channel.subscribe();
+                let mdns_stream = WatchStream::from_changes(mdns_channel_rx);
+
+                let mdns_sse_stream =
+                    mdns_stream.map(|mdns_channel_message| -> Result<sse::Event, &str> {
+                        match mdns_channel_message {
+                            MdnsChannelMessage::ServiceDiscovered { mdns_response } => {
+                                let (Some(hostname_str), Some(socket_address)) =
+                                    (mdns_response.hostname(), mdns_response.socket_address())
+                                else {
+                                    return Err("");
+                                };
+
+                                sse::Event::default()
+                                    .json_data(MdnsService {
+                                        hostname: hostname_str.to_owned(),
+                                        socket_address,
+                                    })
+                                    .map_err(|_| {
+                                        error!("Failed to serialize mDNS response JSON data");
+                                        ""
+                                    })
+                            }
+                            MdnsChannelMessage::Initial => Err(""),
+                        }
+                    });
+
+                let valid_mdns_sse_stream = mdns_sse_stream
+                    .skip_while(|event_result: &Result<sse::Event, &str>| event_result.is_err());
+
+                let valid_mdns_sse_stream_until_shutdown =
+                    crate::or_until_shutdown(valid_mdns_sse_stream, state.shutdown_token.clone());
+
+                Sse::new(valid_mdns_sse_stream_until_shutdown)
+                    .keep_alive(
+                        sse::KeepAlive::new()
+                            .interval(Duration::from_secs(1))
+                            .text("keep-alive-text"),
+                    )
+                    .into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
 }
 
 // TODO: Don't always return the same error
 
 mod post {
+    use std::sync::Arc;
+
     use super::{AuthSession, IntoResponse, StatusCode};
+    use crate::web::AppState;
     use crate::ApiChannelMessage;
     use crate::{Camera, CameraPermission, CameraSetting, Model};
     use axum::extract::{Path, State};
     use axum::Form;
     use axum::Json;
     use serde::Deserialize;
-    use tokio::sync::watch;
 
     #[derive(Debug, Clone, Deserialize)]
     pub struct AddCameraForm {
@@ -306,7 +382,7 @@ mod post {
     pub async fn camera_restart(
         auth_session: AuthSession,
         Path(camera_id): Path<i64>,
-        state: State<watch::Sender<ApiChannelMessage>>,
+        state: State<Arc<AppState>>,
     ) -> impl IntoResponse {
         match auth_session.user {
             Some(user) => {
@@ -319,7 +395,7 @@ mod post {
                     message: crate::web::CameraMessage::Restart,
                 };
 
-                if state.send(api_message).is_err() {
+                if state.api_channel.send(api_message).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
@@ -333,17 +409,18 @@ mod post {
 // TODO: Don't always return the same error
 
 mod patch {
+    use std::sync::Arc;
+
     use super::{AuthSession, IntoResponse, StatusCode};
     use crate::{
-        web::CameraMessage, ApiChannelMessage, CameraPermission, CameraSetting,
-        CameraSettingNoMeta, Model,
+        web::{AppState, CameraMessage},
+        ApiChannelMessage, CameraPermission, CameraSetting, CameraSettingNoMeta, Model,
     };
     use axum::{
         extract::{Path, State},
         Form, Json,
     };
     use serde::Deserialize;
-    use tokio::sync::watch;
     use tracing::warn;
 
     #[derive(Debug, Clone, Deserialize)]
@@ -391,7 +468,7 @@ mod patch {
 
     pub async fn camera_settings(
         auth_session: AuthSession,
-        state: State<watch::Sender<ApiChannelMessage>>,
+        state: State<Arc<AppState>>,
         Path(setting_id): Path<i64>,
         Form(settings_form): Form<UpdateSettingsForm>,
     ) -> impl IntoResponse {
@@ -450,7 +527,7 @@ mod patch {
                     }),
                 };
 
-                if state.send(api_message).is_err() {
+                if state.api_channel.send(api_message).is_err() {
                     warn!("Failed to send camera_settings update to API channel");
                 }
 

@@ -55,6 +55,10 @@ use crate::{
     User, Video,
 };
 
+use super::MdnsChannelMessage;
+
+// TODO: Maybe use `std::future::pending::<()>();` instead of sleeping forever
+
 const SQLITE_URL: &str = "sqlite://data.db";
 const VIDEO_PATH: &str = "./videos/";
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
@@ -80,10 +84,12 @@ pub struct ImageContainer {
     pub image_bytes: Vec<u8>,
 }
 
-struct AppState {
-    images_tx: watch::Sender<ImageContainer>,
-    video_path: PathBuf,
-    api_channel: watch::Sender<ApiChannelMessage>,
+pub struct AppState {
+    pub images_tx: watch::Sender<ImageContainer>,
+    pub video_path: PathBuf,
+    pub api_channel: watch::Sender<ApiChannelMessage>,
+    pub mdns_channel: watch::Sender<MdnsChannelMessage>,
+    pub shutdown_token: CancellationToken,
 }
 
 pub struct App {
@@ -178,18 +184,49 @@ impl App {
 
         let api_channel = watch::Sender::new(ApiChannelMessage::Initial);
 
-        let state = Arc::new(AppState {
+        let mdns_channel = watch::Sender::new(MdnsChannelMessage::Initial);
+
+        let shutdown_token = CancellationToken::new();
+
+        let app_state = Arc::new(AppState {
             images_tx: tx,
             video_path: self.video_path,
             api_channel: api_channel.clone(),
+            mdns_channel: mdns_channel.clone(),
+            shutdown_token: shutdown_token.clone(),
+        });
+
+        let mdns_task = tokio::spawn(async move {
+            let Ok(mdns_discovery) = mdns::discover::interface(
+                "_http._tcp.local",
+                tokio::time::Duration::from_secs(5),
+                Ipv4Addr::UNSPECIFIED,
+            ) else {
+                error!("Failed to create mDNS discovery");
+                return;
+            };
+            let mdns_stream = mdns_discovery.listen();
+            futures_util::pin_mut!(mdns_stream);
+
+            while let Some(Ok(mdns_response)) = mdns_stream.next().await {
+                let (Some(_host), Some(_addr)) =
+                    (mdns_response.hostname(), mdns_response.socket_address())
+                else {
+                    continue;
+                };
+
+                // debug!("Discovered service using mDNS: {host} {addr}");
+
+                mdns_channel.send_replace(MdnsChannelMessage::ServiceDiscovered { mdns_response });
+            }
         });
 
         let main_router = Router::new()
             .route("/api/ws", axum::routing::any(ws_handler))
-            .with_state(state);
+            .with_state(app_state.clone());
 
         // TODO: Order of merge matters here, make sure the correct routes are protected and that fallback works as intended.
-        let app = protected::router(api_channel)
+        let app = protected::router(app_state)
             .fallback_service(embedded_assets_service)
             .route_layer(login_required!(Backend, login_url = "/api/login"))
             .merge(main_router)
@@ -201,10 +238,17 @@ impl App {
             self.listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
         )
-        .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
+        .with_graceful_shutdown(shutdown_signal(
+            deletion_task.abort_handle(),
+            mdns_task.abort_handle(),
+            shutdown_token,
+        ))
         .await?;
 
-        deletion_task.await??;
+        let (mdns_task_result, deletion_task) = tokio::join!(mdns_task, deletion_task);
+
+        mdns_task_result?;
+        deletion_task??;
 
         Ok(())
     }
@@ -212,7 +256,11 @@ impl App {
 
 // ? Maybe move all functions below into App impl block, then use `self` for db pool
 
-async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
+async fn shutdown_signal(
+    deletion_task_abort_handle: AbortHandle,
+    mdns_task_abort_handle: AbortHandle,
+    shutdown_token: CancellationToken,
+) {
     let ctrl_c = async {
         signal::ctrl_c().await.unwrap_or_else(|e| {
             tracing::warn!(error = %e, "Failed to install Ctrl+C handler");
@@ -234,8 +282,16 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        () = ctrl_c => { deletion_task_abort_handle.abort() },
-        () = terminate => { deletion_task_abort_handle.abort() },
+        () = ctrl_c => {
+            deletion_task_abort_handle.abort();
+            shutdown_token.cancel();
+            mdns_task_abort_handle.abort();
+        },
+        () = terminate => {
+            deletion_task_abort_handle.abort();
+            shutdown_token.cancel();
+            mdns_task_abort_handle.abort();
+        },
     }
 }
 

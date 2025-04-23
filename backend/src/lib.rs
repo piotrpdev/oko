@@ -1,3 +1,5 @@
+use futures_util::{Stream, StreamExt};
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub use crate::web::{ApiChannelMessage, App, ImageContainer};
@@ -11,6 +13,33 @@ pub use {
     db::CameraSetting, db::CameraSettingNoMeta, db::Model, db::User, db::Video,
     db::VideoCameraView,
 };
+
+// Taken from https://github.com/hyperium/hyper/issues/2787#issuecomment-1073229886
+/// Run a stream until it completes or we receive the shutdown signal.
+///
+/// Uses the `async-stream` to make things easier to write.
+pub fn or_until_shutdown<S>(
+    stream: S,
+    shutdown_token: CancellationToken,
+) -> impl Stream<Item = S::Item>
+where
+    S: Stream,
+{
+    async_stream::stream! {
+        futures_util::pin_mut!(stream);
+
+        loop {
+            tokio::select! {
+                Some(item) = stream.next() => {
+                    yield item
+                }
+                () = shutdown_token.cancelled() => {
+                    break;
+                }
+            }
+        }
+    }
+}
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // TODO: Improve this, log to file, etc.
