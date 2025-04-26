@@ -3,6 +3,7 @@
   import CirclePlus from "lucide-svelte/icons/circle-plus";
   import Settings from "lucide-svelte/icons/settings";
 
+  import * as Table from "$lib/components/ui/table/index.js";
   import { Button, buttonVariants } from "$lib/components/ui/button/index.js";
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
@@ -17,16 +18,19 @@
   import { user } from "../lib/stores/userStore";
   import DashboardLayout from "$lib/layouts/DashboardLayout.svelte";
   import {
+    isMdnsCamera,
     type Camera,
     type CameraPermission,
     type CameraSetting,
+    type MdnsCamera,
   } from "../types";
   import CameraAndVideos from "$lib/components/CameraAndVideos.svelte";
-  import { Check } from "lucide-svelte";
+  import { Check, Plus, X } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import type { Selected } from "bits-ui";
   import { Separator } from "$lib/components/ui/separator";
   import { Switch } from "$lib/components/ui/switch";
+  import { onDestroy } from "svelte";
 
   let selectedCameraId: number | null = null;
   let selectedCameraName: string | null = null;
@@ -255,6 +259,59 @@
       console.error("Restart Camera failed");
     }
   }
+
+  let mdnsCameras: MdnsCamera[] = [];
+  let mdnsCamerasSse: EventSource | null = null;
+
+  function onMdnsCamerasSseMessage({ data }: MessageEvent) {
+    try {
+      const parsed_msg = JSON.parse(data);
+
+      if (!isMdnsCamera(parsed_msg)) {
+        console.error("Parsed invalid mDNS camera message");
+        return;
+      }
+
+      if (
+        mdnsCameras.find(
+          (camera) => camera.socket_address === parsed_msg.socket_address,
+        )
+      ) {
+        return;
+      }
+
+      mdnsCameras = [...mdnsCameras, parsed_msg];
+    } catch (e) {
+      console.error("Failed to parse mDNS camera message JSON");
+    }
+  }
+
+  function closeMdnsCamerasSse() {
+    mdnsCamerasSse?.removeEventListener("message", onMdnsCamerasSseMessage);
+    mdnsCamerasSse?.close();
+    mdnsCamerasSse = null;
+  }
+
+  $: (async (_addCameraDialogOpen) => {
+    // Need this for tests to run correctly
+    if (typeof EventSource === "undefined") {
+      console.error("EventSource is not supported in this browser");
+      return;
+    }
+
+    if (!_addCameraDialogOpen) {
+      closeMdnsCamerasSse();
+      return;
+    }
+
+    if (mdnsCamerasSse != null) return;
+
+    mdnsCameras = [];
+    mdnsCamerasSse = new EventSource("/api/mdns_cameras_sse");
+    mdnsCamerasSse?.addEventListener("message", onMdnsCamerasSseMessage);
+  })(addCameraDialogOpen);
+
+  onDestroy(() => closeMdnsCamerasSse());
 </script>
 
 <DashboardLayout tab="Cameras">
@@ -548,6 +605,63 @@
                       class="col-span-3"
                     />
                   </div>
+                  <Separator class="my-2" />
+                  <h4 class="text-sm font-medium">mDNS Cameras</h4>
+                  {#await getCamerasPromise}
+                    <!-- TODO: Use skeletons -->
+                    <span class="px-3 py-0 text-muted-foreground"
+                      >Loading...</span
+                    >
+                  {:then cameras}
+                    <!-- TODO: Sort by creation date -->
+                    {#each mdnsCameras as mdnsCamera}
+                      <div class="flex items-center justify-between gap-x-2">
+                        <Label
+                          for={`mdns-camera-${mdnsCamera.socket_address}`}
+                          class="flex flex-col gap-1"
+                        >
+                          <span class="font-normal">{mdnsCamera.hostname}</span>
+                          <span
+                            class="text-xs font-normal leading-snug text-muted-foreground"
+                          >
+                            {mdnsCamera.socket_address.split(":")[0]}
+                            {#if cameras.some((camera) => camera.ip_address.split(":")[0] === mdnsCamera.socket_address.split(":")[0])}
+                              (taken by "{`${cameras.find((camera) => camera.ip_address.split(":")[0] === mdnsCamera.socket_address.split(":")[0])?.camera_name}`}")
+                            {/if}
+                          </span>
+                        </Label>
+                        <Button
+                          id={`mdns-camera-${mdnsCamera.socket_address}`}
+                          variant="outline"
+                          size="icon"
+                          aria-label="Select"
+                          data-camera-ip={mdnsCamera.socket_address}
+                          on:click={() => {
+                            name = mdnsCamera.hostname.includes("oko_camera")
+                              ? (mdnsCamera.hostname
+                                  .split(".")[0]
+                                  .split("_")
+                                  .at(-1) ?? "mDNS Camera")
+                              : "mDNS Camera";
+                            address = mdnsCamera.socket_address.split(":")[0];
+                          }}
+                          disabled={cameras.some(
+                            (camera) =>
+                              camera.ip_address.split(":")[0] ===
+                              mdnsCamera.socket_address.split(":")[0],
+                          )}
+                        >
+                          {#if cameras.some((camera) => camera.ip_address.split(":")[0] === mdnsCamera.socket_address.split(":")[0])}
+                            <X class="h-4 w-4" />
+                          {:else}
+                            <Plus class="h-4 w-4" />
+                          {/if}
+                        </Button>
+                      </div>
+                    {/each}
+                  {:catch error}
+                    <p>{error.message}</p>
+                  {/await}
                 </div>
                 <Dialog.Footer>
                   <Button type="submit">Submit</Button>
