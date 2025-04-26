@@ -141,6 +141,18 @@ impl User {
         .await
     }
 
+    pub async fn get_all(pool: &SqlitePool) -> Result<Vec<Self>> {
+        sqlx::query_as!(
+            User,
+            r#"
+            SELECT *
+            FROM users
+            "#,
+        )
+        .fetch_all(pool)
+        .await
+    }
+
     #[must_use]
     pub fn to_redacted_clone(&self) -> Self {
         Self {
@@ -223,6 +235,20 @@ mod tests {
             returned_user.created_at,
             OffsetDateTime::from_unix_timestamp(1_729_530_138)?
         );
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
+    async fn get_all(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+        let usernames = ["admin", "piotrpdev", "joedaly"];
+        let returned_users = User::get_all(&pool).await?;
+
+        assert_eq!(returned_users.len(), 3);
+
+        assert!(returned_users
+            .iter()
+            .all(|user| usernames.contains(&user.username.as_str())));
 
         Ok(())
     }

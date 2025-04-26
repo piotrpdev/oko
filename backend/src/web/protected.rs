@@ -302,7 +302,7 @@ mod post {
 
     use super::{AuthSession, IntoResponse, StatusCode};
     use crate::web::AppState;
-    use crate::ApiChannelMessage;
+    use crate::{ApiChannelMessage, User};
     use crate::{Camera, CameraPermission, CameraSetting, Model};
     use axum::extract::{Path, State};
     use axum::Form;
@@ -314,8 +314,6 @@ mod post {
         pub name: String,
         pub address: String,
     }
-
-    // TODO: Create camera permissions for new users
 
     pub async fn cameras(
         auth_session: AuthSession,
@@ -369,7 +367,7 @@ mod post {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
-                let mut camera_permission = CameraPermission {
+                let mut admin_camera_permission = CameraPermission {
                     permission_id: CameraPermission::DEFAULT.permission_id,
                     camera_id: camera.camera_id,
                     user_id: user.user_id,
@@ -377,12 +375,39 @@ mod post {
                     can_control: true,
                 };
 
-                if (camera_permission
+                if (admin_camera_permission
                     .create_using_self(&auth_session.backend.db)
                     .await)
                     .is_err()
                 {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                let Ok(all_users) = User::get_all(&auth_session.backend.db).await else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                // TODO: Add test for this
+                for user_from_list in all_users {
+                    if user_from_list.user_id == admin_camera_permission.user_id {
+                        continue;
+                    }
+
+                    let mut camera_permission = CameraPermission {
+                        permission_id: CameraPermission::DEFAULT.permission_id,
+                        camera_id: camera.camera_id,
+                        user_id: user_from_list.user_id,
+                        can_view: false,
+                        can_control: false,
+                    };
+
+                    if (camera_permission
+                        .create_using_self(&auth_session.backend.db)
+                        .await)
+                        .is_err()
+                    {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
                 }
 
                 Json(camera).into_response()

@@ -42,6 +42,10 @@ case "$1" in
         ;;
     "seed")
         cd $BACKEND_DIR
+        # https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md
+        # sqlx database drop
+        # sqlx database create
+        # sqlx migrate run
         cat fixtures/*.sql | sqlite3 data.db
         ;;
     "cam")
