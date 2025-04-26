@@ -327,10 +327,22 @@ mod post {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
+                let ip_addr = if let Ok(ip_addr_port_not_specified) =
+                    camera_form.address.parse::<std::net::IpAddr>()
+                {
+                    ip_addr_port_not_specified.to_string() + ":*"
+                } else if let Ok(ip_addr_port_specified) =
+                    camera_form.address.parse::<std::net::SocketAddr>()
+                {
+                    ip_addr_port_specified.to_string()
+                } else {
+                    return StatusCode::BAD_REQUEST.into_response();
+                };
+
                 let mut camera = Camera {
                     camera_id: Camera::DEFAULT.camera_id,
                     name: camera_form.name,
-                    ip_address: Some(camera_form.address),
+                    ip_address: Some(ip_addr),
                     last_connected: Camera::DEFAULT.last_connected,
                     is_active: Camera::DEFAULT.is_active,
                 };
