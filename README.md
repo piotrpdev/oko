@@ -62,6 +62,7 @@ Made using the following resources:
 | [gatekeeper source code][gatekeeper]      | [Unlicense][gatekeeper-license]   |
 | [`esp-camera-rs` package fork][cam-rs]    | [MIT][cam-rs-license]             |
 | [Geist font][geist]                       | [OFL-1.1][geist-license]          |
+|[`mdns` examples][mdns]                    | [MIT][mdns-license]               |
 
 [^1]: [*"...this solution can be customized to suit your particular requirements.
 Don’t hesitate to make adjustments and employ this code according to your
@@ -116,5 +117,7 @@ video-to-image conversion needs."*][video2image-medium]
 [cam-rs-license]: https://github.com/hnz1102/esp-camera-rs/blob/main/LICENSE
 [geist]: https://github.com/vercel/geist-font
 [geist-license]: https://github.com/vercel/geist-font/blob/main/OFL.txt
+[mdns]: https://github.com/dylanmckay/mdns/tree/master/examples
+[mdns-license]: https://github.com/dylanmckay/mdns/blob/master/LICENSE
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->

@@ -1,4 +1,5 @@
 pub use app::App;
+pub use app::AppState;
 pub use app::ImageContainer;
 use serde::Deserialize;
 use serde::Serialize;
@@ -18,6 +19,12 @@ pub enum ApiChannelMessage {
         camera_id: i64,
         message: CameraMessage,
     },
+    Initial,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum MdnsChannelMessage {
+    ServiceDiscovered { mdns_response: mdns::Response },
     Initial,
 }
 
