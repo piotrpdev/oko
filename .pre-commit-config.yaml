@@ -19,6 +19,7 @@ repos:
       rev: v0.13.0
       hooks:
           - id: markdownlint-cli2
+            exclude: "CHANGELOG"
     - repo: local
       hooks:
           - id: sqlx
@@ -40,7 +41,8 @@ repos:
             entry: cargo clippy
             language: system
             types: [rust]
-            args: ["--manifest-path", "./backend/Cargo.toml", "--fix", "--allow-dirty", "--allow-staged", "--all-targets"]
+            # TODO: use `--exclude` to ignore mdns submodule once clippy is fixed https://github.com/rust-lang/rust-clippy/issues/9555
+            args: ["--manifest-path", "./backend/Cargo.toml", "--fix", "--allow-dirty", "--allow-staged", "--all-targets", "--", "--no-deps"]
             pass_filenames: false
           - id: fmt
             name: fmt

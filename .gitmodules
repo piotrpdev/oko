@@ -1,3 +1,8 @@
 [submodule "camera/esp-camera-rs"]
 	path = camera/esp-camera-rs
 	url = ../esp-camera-rs.git
+
+[submodule "backend/mdns"]
+	path = backend/mdns
+	url = ../mdns.git
+	branch = multihome-mdns-old-deps
