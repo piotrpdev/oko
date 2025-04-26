@@ -1621,7 +1621,7 @@ dependencies = [
 
 [[package]]
 name = "oko"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "async-stream",
  "async-trait",
