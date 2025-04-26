@@ -30,13 +30,13 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout repository
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4.1.0
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache-dependency-path: ./frontend/package-lock.json
@@ -60,7 +60,7 @@ jobs:
         run: sudo ln -fs libclang.so.1 /usr/lib/llvm-14/lib/libclang.so
 
       - name: Restore Apt packages
-        uses: awalsh128/cache-apt-pkgs-action@v1.4.3
+        uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: libopencv-dev
           version: "1.0"
@@ -69,7 +69,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.81.0
 
       - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2.7.3
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: ./backend
 
@@ -99,7 +99,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout repository
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ steps.generate-token.outputs.token }}
@@ -108,7 +108,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.81.0
 
       - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2.7.3
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: ./backend
 
