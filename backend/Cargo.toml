@@ -41,7 +41,7 @@ tokio-util = { version = "0.7.12", features = ["rt"] }
 axum-embed = "0.1.0"
 rust-embed = "8.5.0"
 serde_bytes = "0.11.15"
-mdns = { path = "mdns" } # This fork adds back tokio support
+mdns = { git = "https://github.com/PhysicalGraph/mdns.git", rev = "6de7b76434f3fc4f5702322b995ac66963b2c60f" } # This fork adds back tokio support
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 async-stream = "0.3.6"
 
