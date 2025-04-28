@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10](https://github.com/piotrpdev/oko/compare/oko-v0.1.9...oko-v0.1.10) - 2025-04-28
+
+### Added
+
+- OKO-108 refresh camera list on change
+
 ## [0.1.9](https://github.com/piotrpdev/oko/compare/oko-v0.1.8...oko-v0.1.9) - 2025-04-28
 
 ### Added
