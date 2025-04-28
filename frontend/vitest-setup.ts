@@ -6,6 +6,7 @@ import { WebSocket } from "undici";
 import {
   Camera,
   CameraPermission,
+  CameraSetting,
   ImageContainer,
   User,
   VideoCameraView,
@@ -27,12 +28,14 @@ export let testCameras: Camera[] = [
   {
     camera_id: 1,
     camera_name: "Front Door",
+    ip_address: "192.168.0.28:*",
     can_control: true,
     can_view: true,
   },
   {
     camera_id: 2,
     camera_name: "Kitchen",
+    ip_address: "192.168.0.32:*",
     can_control: true,
     can_view: true,
   },
@@ -41,6 +44,7 @@ export let testCameras: Camera[] = [
 export const testCamera1: Camera = {
   camera_id: 3,
   camera_name: "Backyard",
+  ip_address: "192.168.0.68:*",
   can_control: true,
   can_view: true,
 };
@@ -76,6 +80,18 @@ export const testPermissions: CameraPermission[] = [
     username: "joedaly",
     can_view: true,
     can_control: false,
+  },
+];
+
+export const testSettings: CameraSetting[] = [
+  {
+    camera_id: 1,
+    flashlight_enabled: false,
+    framerate: 5,
+    last_modified: [2023, 10, 21, 17, 1, 23],
+    modified_by: 1,
+    resolution: "SVGA",
+    setting_id: 1,
   },
 ];
 
@@ -128,6 +144,15 @@ export const handlers = [
 
     return HttpResponse.json(permissions);
   }),
+  http.get("/api/cameras/:cameraId/settings", ({ params: { cameraId } }) => {
+    const parsedCameraId = Number(cameraId);
+
+    const settings = testSettings.filter(
+      (permission) => permission.camera_id == parsedCameraId,
+    );
+
+    return HttpResponse.json(settings);
+  }),
   http.post("/api/cameras", async ({ request }) => {
     const requestBody = await request.formData();
 
@@ -136,6 +161,7 @@ export const handlers = [
     const newCamera = {
       camera_id: testCameras.length + 1,
       camera_name: requestBody.get("name") as string,
+      ip_address: "192.168.0.76:*",
       can_control: false,
       can_view: true,
     };

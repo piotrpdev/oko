@@ -14,11 +14,19 @@ pub enum CameraMessage {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum CameraListChange {
+    Added { camera_id: i64 },
+    Removed { camera_id: i64 },
+    Updated { camera_id: i64 },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ApiChannelMessage {
-    CameraRelated {
+    CameraAction {
         camera_id: i64,
         message: CameraMessage,
     },
+    CameraListChanged(CameraListChange),
     Initial,
 }
 

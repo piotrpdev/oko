@@ -298,27 +298,51 @@ mod get {
 // TODO: Don't always return the same error
 
 mod post {
+    use std::net::{IpAddr, SocketAddr};
     use std::sync::Arc;
 
     use super::{AuthSession, IntoResponse, StatusCode};
-    use crate::web::AppState;
-    use crate::ApiChannelMessage;
+    use crate::web::{AppState, CameraListChange};
+    use crate::{ApiChannelMessage, User};
     use crate::{Camera, CameraPermission, CameraSetting, Model};
     use axum::extract::{Path, State};
     use axum::Form;
     use axum::Json;
     use serde::Deserialize;
+    use tracing::debug;
 
     #[derive(Debug, Clone, Deserialize)]
     pub struct AddCameraForm {
         pub name: String,
         pub address: String,
+        #[serde(default)]
+        pub skip_mdns_connect: bool,
     }
 
-    // TODO: Create camera permissions for new users
+    pub enum MdnsConnectAddress {
+        IpAddr(IpAddr),
+        SocketAddr(SocketAddr),
+    }
 
+    impl TryFrom<String> for MdnsConnectAddress {
+        type Error = ();
+
+        fn try_from(address: String) -> Result<Self, Self::Error> {
+            #[allow(clippy::option_if_let_else)] // This is more readable
+            if let Ok(ip_addr) = address.parse::<std::net::IpAddr>() {
+                Ok(Self::IpAddr(ip_addr))
+            } else if let Ok(socket_addr) = address.parse::<std::net::SocketAddr>() {
+                Ok(Self::SocketAddr(socket_addr))
+            } else {
+                Err(())
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_lines)] // TODO: Refactor
     pub async fn cameras(
         auth_session: AuthSession,
+        state: State<Arc<AppState>>,
         Form(camera_form): Form<AddCameraForm>,
     ) -> impl IntoResponse {
         match auth_session.user {
@@ -327,10 +351,56 @@ mod post {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
+                let Ok(mdns_connect_address) = camera_form.address.try_into() else {
+                    return StatusCode::BAD_REQUEST.into_response();
+                };
+
+                let mdns_connect_url = match mdns_connect_address {
+                    MdnsConnectAddress::IpAddr(ip_addr) => {
+                        format!("http://{ip_addr}:80/mdns_connect")
+                    } // Try default oko camera port
+                    MdnsConnectAddress::SocketAddr(socket_addr) => {
+                        format!("http://{socket_addr}/mdns_connect")
+                    }
+                };
+
+                if !camera_form.skip_mdns_connect && state.oko_private_socket_addr.is_some() {
+                    let Some(oko_private_socket_addr) = state.oko_private_socket_addr else {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    };
+
+                    let Ok(resp) = reqwest::Client::new()
+                        .post(mdns_connect_url)
+                        .form(&[("oko", oko_private_socket_addr.to_string())])
+                        .send()
+                        .await
+                    else {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    };
+
+                    if resp.status() != StatusCode::OK {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                } else {
+                    debug!(
+                        "Skipping mDNS connect, Skip?: {}, Socket Address is Some?: {}",
+                        camera_form.skip_mdns_connect,
+                        state.oko_private_socket_addr.is_some()
+                    );
+                }
+
+                let internal_mdns_connect_address = match mdns_connect_address {
+                    MdnsConnectAddress::IpAddr(ip_addr) => {
+                        // If port is not specified, accept any port
+                        ip_addr.to_string() + ":*"
+                    }
+                    MdnsConnectAddress::SocketAddr(socket_addr) => socket_addr.to_string(),
+                };
+
                 let mut camera = Camera {
                     camera_id: Camera::DEFAULT.camera_id,
                     name: camera_form.name,
-                    ip_address: Some(camera_form.address),
+                    ip_address: Some(internal_mdns_connect_address),
                     last_connected: Camera::DEFAULT.last_connected,
                     is_active: Camera::DEFAULT.is_active,
                 };
@@ -357,7 +427,7 @@ mod post {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
-                let mut camera_permission = CameraPermission {
+                let mut admin_camera_permission = CameraPermission {
                     permission_id: CameraPermission::DEFAULT.permission_id,
                     camera_id: camera.camera_id,
                     user_id: user.user_id,
@@ -365,9 +435,48 @@ mod post {
                     can_control: true,
                 };
 
-                if (camera_permission
+                if (admin_camera_permission
                     .create_using_self(&auth_session.backend.db)
                     .await)
+                    .is_err()
+                {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                let Ok(all_users) = User::get_all(&auth_session.backend.db).await else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                // TODO: Add test for this
+                for user_from_list in all_users {
+                    if user_from_list.user_id == admin_camera_permission.user_id {
+                        continue;
+                    }
+
+                    let mut camera_permission = CameraPermission {
+                        permission_id: CameraPermission::DEFAULT.permission_id,
+                        camera_id: camera.camera_id,
+                        user_id: user_from_list.user_id,
+                        can_view: false,
+                        can_control: false,
+                    };
+
+                    if (camera_permission
+                        .create_using_self(&auth_session.backend.db)
+                        .await)
+                        .is_err()
+                    {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                }
+
+                if state
+                    .api_channel
+                    .send(ApiChannelMessage::CameraListChanged(
+                        CameraListChange::Added {
+                            camera_id: camera.camera_id,
+                        },
+                    ))
                     .is_err()
                 {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -390,7 +499,7 @@ mod post {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
-                let api_message = ApiChannelMessage::CameraRelated {
+                let api_message = ApiChannelMessage::CameraAction {
                     camera_id,
                     message: crate::web::CameraMessage::Restart,
                 };
@@ -413,7 +522,7 @@ mod patch {
 
     use super::{AuthSession, IntoResponse, StatusCode};
     use crate::{
-        web::{AppState, CameraMessage},
+        web::{AppState, CameraListChange, CameraMessage},
         ApiChannelMessage, CameraPermission, CameraSetting, CameraSettingNoMeta, Model,
     };
     use axum::{
@@ -431,6 +540,7 @@ mod patch {
 
     pub async fn permissions(
         auth_session: AuthSession,
+        state: State<Arc<AppState>>,
         Path(permission_id): Path<i64>,
         Form(permission_form): Form<UpdatePermissionForm>,
     ) -> impl IntoResponse {
@@ -450,6 +560,18 @@ mod patch {
                 permission.can_control = permission_form.can_control;
 
                 if (permission.update_using_self(&auth_session.backend.db).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                if state
+                    .api_channel
+                    .send(ApiChannelMessage::CameraListChanged(
+                        CameraListChange::Updated {
+                            camera_id: permission.camera_id,
+                        },
+                    ))
+                    .is_err()
+                {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
@@ -518,7 +640,7 @@ mod patch {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
-                let api_message = ApiChannelMessage::CameraRelated {
+                let api_message = ApiChannelMessage::CameraAction {
                     camera_id: setting.camera_id,
                     message: CameraMessage::SettingChanged(CameraSettingNoMeta {
                         flashlight_enabled: setting.flashlight_enabled,
@@ -539,12 +661,21 @@ mod patch {
 }
 
 mod delete {
+    use std::sync::Arc;
+
     use super::{AuthSession, IntoResponse, StatusCode};
-    use crate::{Camera, Model};
-    use axum::{extract::Path, Json};
+    use crate::{
+        web::{AppState, CameraListChange},
+        ApiChannelMessage, Camera, Model,
+    };
+    use axum::{
+        extract::{Path, State},
+        Json,
+    };
 
     pub async fn cameras(
         auth_session: AuthSession,
+        state: State<Arc<AppState>>,
         Path(camera_id): Path<i64>,
     ) -> impl IntoResponse {
         match auth_session.user {
@@ -554,6 +685,16 @@ mod delete {
                 }
 
                 if (Camera::delete_using_id(&auth_session.backend.db, camera_id).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                if state
+                    .api_channel
+                    .send(ApiChannelMessage::CameraListChanged(
+                        CameraListChange::Removed { camera_id },
+                    ))
+                    .is_err()
+                {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 

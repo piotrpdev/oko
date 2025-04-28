@@ -19,6 +19,7 @@ repos:
       rev: v0.13.0
       hooks:
           - id: markdownlint-cli2
+            exclude: "CHANGELOG"
     - repo: local
       hooks:
           - id: sqlx

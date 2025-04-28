@@ -5,9 +5,25 @@ export type User = {
   created_at: Array<number>;
 };
 
+export type MdnsCamera = {
+  hostname: string;
+  socket_address: string;
+};
+
+export function isMdnsCamera(obj: unknown): obj is MdnsCamera {
+  return (
+    obj instanceof Object &&
+    "hostname" in obj &&
+    "socket_address" in obj &&
+    typeof obj.hostname === "string" &&
+    typeof obj.socket_address === "string"
+  );
+}
+
 export type Camera = {
   camera_id: number;
   camera_name: string;
+  ip_address: string;
   can_control: boolean;
   can_view: boolean;
 };

@@ -110,7 +110,7 @@ impl Camera {
         sqlx::query_as!(
             CameraPermissionView,
             r#"
-            SELECT c.camera_id, c.name as camera_name, cp.can_view, cp.can_control
+            SELECT c.camera_id, c.name as camera_name, c.ip_address, cp.can_view, cp.can_control
             FROM cameras c
             JOIN camera_permissions cp ON c.camera_id = cp.camera_id
             WHERE cp.user_id = ? AND cp.can_view
@@ -240,6 +240,10 @@ mod tests {
 
         assert_eq!(returned_cameras.first().unwrap().camera_id, 1);
         assert_eq!(returned_cameras.first().unwrap().camera_name, "Front Door");
+        assert_eq!(
+            returned_cameras.first().unwrap().ip_address,
+            Some("127.0.0.1:40000".to_owned())
+        );
         assert!(returned_cameras.first().unwrap().can_view);
         assert!(!returned_cameras.first().unwrap().can_control);
 

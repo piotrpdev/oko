@@ -1,9 +1,4 @@
-import {
-  findAllByAltText,
-  fireEvent,
-  render,
-  waitFor,
-} from "@testing-library/svelte";
+import { fireEvent, render, waitFor } from "@testing-library/svelte";
 import { describe, test, expect } from "vitest";
 import Home from "../src/routes/Home.svelte";
 import Cameras from "../src/routes/Cameras.svelte";
@@ -122,13 +117,8 @@ describe("Cameras page", () => {
   test("user permissions for camera update after change", async () => {
     user.set(testUserAndCameras);
 
-    const {
-      getByText,
-      queryByText,
-      getAllByLabelText,
-      getByRole,
-      getAllByRole,
-    } = render(Cameras);
+    const { getByText, queryByText, getAllByLabelText, getAllByRole } =
+      render(Cameras);
 
     expect(queryByText(testCameras[0].camera_name)).not.toBeInTheDocument();
 
@@ -226,8 +216,7 @@ describe("Home page", () => {
     user.set(testUserAndCameras);
     socket.set(new WebSocket("ws://localhost:3000/api/ws"));
 
-    const { getByAltText, queryByAltText, getAllByAltText, findAllByAltText } =
-      render(Home);
+    const { queryByAltText, getAllByAltText } = render(Home);
 
     expect(queryByAltText(liveFeedAltText)).not.toBeInTheDocument();
 
@@ -241,12 +230,12 @@ describe("Home page", () => {
 
     expect(
       [...liveFeedImgs!].some(
-        (img) => (img.dataset.cameraId = testCameras[0].camera_id),
+        (img) => (img.dataset.cameraId = String(testCameras[0].camera_id)),
       ),
     ).toBe(true);
     expect(
       [...liveFeedImgs!].some(
-        (img) => (img.dataset.cameraId = testCameras[1].camera_id),
+        (img) => (img.dataset.cameraId = String(testCameras[1].camera_id)),
       ),
     ).toBe(true);
 

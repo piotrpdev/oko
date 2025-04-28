@@ -50,7 +50,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     users::{AuthSession, Backend},
-    web::{auth, protected, CameraMessage},
+    web::{auth, protected, CameraListChange, CameraMessage},
     ApiChannelMessage, Camera, CameraPermissionView, CameraSetting, CameraSettingNoMeta, Model,
     User, Video,
 };
@@ -90,12 +90,14 @@ pub struct AppState {
     pub api_channel: watch::Sender<ApiChannelMessage>,
     pub mdns_channel: watch::Sender<MdnsChannelMessage>,
     pub shutdown_token: CancellationToken,
+    pub oko_private_socket_addr: Option<SocketAddr>,
 }
 
 pub struct App {
     pub db: SqlitePool,
     pub listener: TcpListener,
     pub video_path: PathBuf,
+    pub oko_private_socket_addr: Option<SocketAddr>,
 }
 
 impl App {
@@ -123,10 +125,15 @@ impl App {
 
         debug!("Video path: {:?}", video_path);
 
+        // Private IPv4 e.g. 192.168.x.x with port for passing to camera
+        let oko_private_socket_addr =
+            SocketAddr::from((local_ip_address::local_ip()?, listener.local_addr()?.port()));
+
         Ok(Self {
             db,
             listener,
             video_path,
+            oko_private_socket_addr: Some(oko_private_socket_addr),
         })
     }
 
@@ -194,6 +201,7 @@ impl App {
             api_channel: api_channel.clone(),
             mdns_channel: mdns_channel.clone(),
             shutdown_token: shutdown_token.clone(),
+            oko_private_socket_addr: self.oko_private_socket_addr,
         });
 
         let mdns_task = tokio::spawn(async move {
@@ -312,7 +320,7 @@ async fn ws_handler(
     info!("{addr} connected to ws_handler.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state, auth_session))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state, Arc::new(auth_session)))
 }
 
 // ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
@@ -324,7 +332,7 @@ async fn handle_socket(
     mut socket: WebSocket,
     who: SocketAddr,
     state: State<Arc<AppState>>,
-    auth_session: AuthSession,
+    auth_session: Arc<AuthSession>,
 ) {
     info!("{who} connected to handle_socket.");
 
@@ -375,7 +383,8 @@ async fn handle_socket(
     }
 
     let mut initial_camera_settings = None;
-    let mut cameras: Vec<CameraPermissionView> = Vec::new();
+    let cameras: Arc<Mutex<Vec<CameraPermissionView>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut user_id = None;
 
     if is_camera {
         // TODO: Maybe find a better way to handle this
@@ -411,10 +420,12 @@ async fn handle_socket(
         initial_camera_settings = Some(camera_settings);
     } else {
         // TODO: Return errors to user
-        let Some(user) = auth_session.user else {
+        let Some(ref user) = auth_session.user else {
             error!("User not found in auth session...");
             return;
         };
+
+        user_id = Some(user.user_id);
 
         let Ok(i_cameras) =
             Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
@@ -423,7 +434,7 @@ async fn handle_socket(
             return;
         };
 
-        cameras = i_cameras;
+        *cameras.lock().await = i_cameras;
     }
 
     let initial_camera_settings_clone = initial_camera_settings.clone();
@@ -436,6 +447,7 @@ async fn handle_socket(
     // ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
     let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if is_camera {
+            let auth_session_clone = auth_session.clone();
             // TODO: Check if errors are returned properly here, had some issues with the ? operator being silent
             tracker.spawn(async move {
                 let now = Video::DEFAULT.start_time();
@@ -454,7 +466,9 @@ async fn handle_socket(
                 };
 
                 // ? Maybe don't create video until first frame (or maybe doing this is actually a good approach)?
-                video.create_using_self(&auth_session.backend.db).await?;
+                video
+                    .create_using_self(&auth_session_clone.backend.db)
+                    .await?;
 
                 let (frame_width, frame_height, framerate) = match initial_camera_settings_clone {
                     #[allow(clippy::match_same_arms)] // readability
@@ -526,7 +540,9 @@ async fn handle_socket(
                 video.end_time = Some(OffsetDateTime::now_utc());
                 video.file_size = Some(total_bytes.try_into()?);
 
-                video.update_using_self(&auth_session.backend.db).await?;
+                video
+                    .update_using_self(&auth_session_clone.backend.db)
+                    .await?;
                 info!("Recording finished for {who}...");
 
                 Ok(())
@@ -559,6 +575,7 @@ async fn handle_socket(
     #[allow(clippy::if_not_else)]
     let mut send_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if !is_camera {
+            let cameras_clone = cameras.clone();
             let mut images_rx = state.images_tx.subscribe();
             let sender_mutex_clone = sender_mutex.clone();
             // TODO: Proper error handling
@@ -572,20 +589,24 @@ async fn handle_socket(
                     if first_received {
                         debug!("Sending message to {who}...");
 
-                        if !cameras.iter().any(|c| c.camera_id == message.camera_id) {
-                            continue;
-                        }
-
-                        // TODO: look into bincode (fastest?) / rmp-serde (wide support) / flatbuffers (partial deserialization)
-                        let message_json = serde_json::to_string(&message)?;
-                        let message_json_msg = Message::Text(message_json.clone());
-
-                        // TODO: Handle error here
-                        sender_mutex_clone
+                        // TODO: locking this mutex in such a hot path is a horrible idea, absolutely find a better way to do this
+                        if cameras_clone
                             .lock()
                             .await
-                            .send(message_json_msg)
-                            .await?;
+                            .iter()
+                            .any(|c| c.camera_id == message.camera_id)
+                        {
+                            // TODO: look into bincode (fastest?) / rmp-serde (wide support) / flatbuffers (partial deserialization)
+                            let message_json = serde_json::to_string(&message)?;
+                            let message_json_msg = Message::Text(message_json.clone());
+
+                            // TODO: Handle error here
+                            sender_mutex_clone
+                                .lock()
+                                .await
+                                .send(message_json_msg)
+                                .await?;
+                        }
                     }
 
                     if images_rx.changed().await.is_err() {
@@ -647,11 +668,12 @@ async fn handle_socket(
         }
     });
 
+    let api_channel = state.api_channel.clone();
+    let mut first_received = false;
+
     let mut api_listener_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if is_camera {
-            let api_channel = state.api_channel.clone();
             let sender_mutex_clone = sender_mutex.clone();
-            let mut first_received = false;
             tokio::spawn(async move {
                 if let Some(some_camera_settings) = initial_camera_settings {
                     let some_initial_camera_settings = CameraSettingNoMeta {
@@ -680,8 +702,9 @@ async fn handle_socket(
                     let api_msg = (*api_channel_rx.borrow_and_update()).clone();
 
                     if first_received {
+                        #[allow(clippy::single_match)] // will change in the future
                         match api_msg {
-                            ApiChannelMessage::CameraRelated {
+                            ApiChannelMessage::CameraAction {
                                 camera_id: message_camera_id,
                                 message,
                             } => {
@@ -700,6 +723,17 @@ async fn handle_socket(
                                     }
                                 }
                             }
+                            ApiChannelMessage::CameraListChanged(change) => match change {
+                                CameraListChange::Removed {
+                                    camera_id: camera_id_removed,
+                                } => {
+                                    if camera_id_removed == camera_id {
+                                        info!("Closing WebSocket for {who} because camera was removed from DB");
+                                        return Err("Camera removed from DB".into());
+                                    }
+                                }
+                                _ => (),
+                            },
                             ApiChannelMessage::Initial => (),
                         }
                     }
@@ -715,10 +749,47 @@ async fn handle_socket(
             })
         } else {
             tokio::spawn(async move {
-                let mut interval = tokio::time::interval(EMPTY_TASK_SLEEP_DURATION);
+                let mut api_channel_rx = api_channel.subscribe();
                 loop {
-                    interval.tick().await;
+                    let api_msg = (*api_channel_rx.borrow_and_update()).clone();
+
+                    if first_received {
+                        #[allow(clippy::single_match)] // will change in the future
+                        match api_msg {
+                            // TODO: every user task performing this is wasteful, global camera list mutex shared with api would be better
+                            ApiChannelMessage::CameraListChanged(_) => {
+                                info!("API channel message received for camera list changed for {who}...");
+
+                                let Some(user_id_some) = user_id else {
+                                    error!("Camera list changed but user was not found in auth_session. How is this even possible?");
+                                    break;
+                                };
+
+                                let Ok(new_cameras) = Camera::list_accessible_to_user(
+                                    &auth_session.backend.db,
+                                    user_id_some,
+                                )
+                                .await
+                                else {
+                                    // TODO: prevent potential endless loop here from the DB call always failing
+                                    error!("Error listing new cameras for {who}...");
+                                    continue;
+                                };
+
+                                *cameras.lock().await = new_cameras;
+                            }
+                            _ => (),
+                        }
+                    }
+
+                    if api_channel_rx.changed().await.is_err() {
+                        break;
+                    }
+
+                    first_received = true;
                 }
+
+                Ok(())
             })
         };
 
@@ -756,6 +827,10 @@ async fn handle_socket(
                 Ok(_) => info!("api_listener_task finished for {who}"),
                 Err(d) => error!("Error listening to API channel {d:?}")
             }
+            send_task.abort();
+            recv_task.abort();
+            recording_token_clone.cancel();
+            tracker.wait().await;
             // ? Maybe do something if api channel fails e.g. send a message to the client/DB
         }
     }
