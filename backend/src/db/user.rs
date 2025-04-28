@@ -179,9 +179,9 @@ mod tests {
 
         user.create_using_self(&pool).await?;
 
-        assert_eq!(user.user_id, 4);
+        assert_eq!(user.user_id, 5);
 
-        let returned_user = User::get_using_id(&pool, 4).await?;
+        let returned_user = User::get_using_id(&pool, 5).await?;
 
         assert_eq!(returned_user.username, user.username);
         assert_eq!(returned_user.password_hash, user.password_hash);
@@ -241,10 +241,10 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn get_all(pool: SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
-        let usernames = ["admin", "piotrpdev", "joedaly"];
+        let usernames = ["admin", "piotrpdev", "joedaly", "guest"];
         let returned_users = User::get_all(&pool).await?;
 
-        assert_eq!(returned_users.len(), 3);
+        assert_eq!(returned_users.len(), 4);
 
         assert!(returned_users
             .iter()

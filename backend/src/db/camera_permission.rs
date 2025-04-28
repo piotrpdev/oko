@@ -148,7 +148,7 @@ mod tests {
 
         camera_permission.create_using_self(&pool).await?;
 
-        assert_eq!(camera_permission.permission_id, 7);
+        assert_eq!(camera_permission.permission_id, 9);
 
         let returned_permission =
             CameraPermission::get_using_id(&pool, camera_permission.permission_id).await?;
@@ -248,7 +248,7 @@ mod tests {
         let camera_id = 1;
 
         let returned_permissions = CameraPermission::list_for_camera(&pool, camera_id).await?;
-        assert_eq!(returned_permissions.len(), 3);
+        assert_eq!(returned_permissions.len(), 4);
 
         let permission_ids: Vec<i64> = returned_permissions
             .iter()
@@ -258,6 +258,7 @@ mod tests {
         assert!(permission_ids.contains(&1));
         assert!(permission_ids.contains(&3));
         assert!(permission_ids.contains(&5));
+        assert!(permission_ids.contains(&7));
 
         Ok(())
     }
@@ -271,7 +272,7 @@ mod tests {
 
         let returned_permissions =
             CameraPermission::list_for_camera_with_username(&pool, camera_id).await?;
-        assert_eq!(returned_permissions.len(), 3);
+        assert_eq!(returned_permissions.len(), 4);
 
         let permission_ids: Vec<i64> = returned_permissions
             .iter()
@@ -281,6 +282,7 @@ mod tests {
         assert!(permission_ids.contains(&1));
         assert!(permission_ids.contains(&3));
         assert!(permission_ids.contains(&5));
+        assert!(permission_ids.contains(&7));
 
         let usernames: Vec<&str> = returned_permissions
             .iter()
@@ -290,6 +292,7 @@ mod tests {
         assert!(usernames.contains(&"piotrpdev"));
         assert!(usernames.contains(&"joedaly"));
         assert!(usernames.contains(&"admin"));
+        assert!(usernames.contains(&"guest"));
 
         Ok(())
     }
