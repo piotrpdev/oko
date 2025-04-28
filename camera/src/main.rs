@@ -137,8 +137,7 @@ fn main() -> anyhow::Result<()> {
 
     let setup_details = get_setup_details(&nvs_default_partition)?;
     let esp_needs_setup = setup_details.ssid.is_empty()
-        || setup_details.pass.is_empty()
-        || setup_details.oko.is_empty();
+        || setup_details.pass.is_empty();
 
     let saved_camera_settings = get_camera_settings(&nvs_default_partition)?;
 
@@ -212,13 +211,19 @@ fn main() -> anyhow::Result<()> {
 
             wifi = start_sta(esp_wifi, &sys_loop).await?;
 
-            _ws_client = start_websocket_client(
-                camera.clone(),
-                lamp_pin,
-                saved_camera_settings.framerate,
-                nvs_default_partition.clone(),
-                setup_details,
-            )?;
+            if setup_details.oko.is_empty() {
+                info!("Oko IP is empty, not starting WebSocket client");
+            } else {
+                info!("Oko IP is present, starting WebSocket client");
+
+                _ws_client = start_websocket_client(
+                    camera.clone(),
+                    lamp_pin,
+                    saved_camera_settings.framerate,
+                    nvs_default_partition.clone(),
+                    setup_details,
+                )?;
+            }
         }
 
         let _http_server = start_http_server(nvs_default_partition, esp_needs_setup, camera)?;
@@ -484,6 +489,11 @@ fn validate_form_data(form: &FormData) -> anyhow::Result<()> {
         .all(|c| c.is_ascii() && !c.is_whitespace())
     {
         bail!("Oko param contains non-ascii or whitespace characters");
+    }
+
+    // Oko IP is optional, the backend can set this later after finding the camera using mDNS
+    if oko_param.is_empty() {
+        return Ok(());
     }
 
     if !(9..=21).contains(&oko_param.len()) {
