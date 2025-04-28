@@ -7,8 +7,13 @@
   import { replace } from "svelte-spa-router";
   import { user } from "../lib/stores/userStore";
 
-  let username = "admin";
-  let password = "hunter42";
+  const DEFAULT_ADMIN_USERNAME = "admin";
+  const DEFAULT_ADMIN_PASSWORD = "hunter42";
+  const DEFAULT_GUEST_USERNAME = "guest";
+  const DEFAULT_GUEST_PASSWORD = "hunter42";
+
+  let username = import.meta.env.DEV ? DEFAULT_ADMIN_USERNAME : "";
+  let password = import.meta.env.DEV ? DEFAULT_ADMIN_PASSWORD : "";
 
   async function handleSubmit() {
     const response = await fetch("/api/login", {
@@ -76,8 +81,21 @@
             />
           </div>
         </Card.Content>
-        <Card.Footer>
+        <Card.Footer class="flex-col gap-4">
           <Button id="login" class="w-full" type="submit">Sign in</Button>
+          <Button
+            id="login-guest"
+            variant="outline"
+            class="w-full"
+            type="button"
+            on:click={() => {
+              username = DEFAULT_GUEST_USERNAME;
+              password = DEFAULT_GUEST_PASSWORD;
+              handleSubmit();
+            }}
+          >
+            Sign in as Guest
+          </Button>
         </Card.Footer>
       </form>
     </Card.Root>

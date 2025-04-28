@@ -58,10 +58,13 @@ use super::{ImageContainer, MdnsChannelMessage};
 
 // TODO: Maybe use `std::future::pending::<()>();` instead of sleeping forever
 
+// TODO: Change default admin and guest hashes, remember to search and update where they're hardcoded
 const SQLITE_URL: &str = "sqlite://data.db";
 const VIDEO_PATH: &str = "./videos/";
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const DEFAULT_ADMIN_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw";
+const DEFAULT_GUEST_USERNAME: &str = "guest";
+const DEFAULT_GUEST_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw";
 const EXPIRED_SESSION_DELETION_INTERVAL: tokio::time::Duration =
     tokio::time::Duration::from_secs(60);
 const SESSION_DURATION: Duration = Duration::days(1);
@@ -140,6 +143,21 @@ impl App {
             };
 
             admin.create_using_self(&self.db).await?;
+        }
+
+        // ? Maybe make this optional just in case
+        let guest_exists = User::get_using_username(&self.db, DEFAULT_GUEST_USERNAME)
+            .await
+            .is_ok();
+        if !guest_exists {
+            let mut guest = User {
+                user_id: User::DEFAULT.user_id,
+                username: "guest".to_string(),
+                password_hash: DEFAULT_GUEST_PASS_HASH.to_owned(),
+                created_at: User::DEFAULT.created_at(),
+            };
+
+            guest.create_using_self(&self.db).await?;
         }
 
         // Session layer.
