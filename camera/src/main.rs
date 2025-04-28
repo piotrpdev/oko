@@ -46,6 +46,8 @@ use serde::Deserialize;
 // TODO: Provide endpoint with ESP32 real time stats
 // TODO: Remove unnecessary async/block_on just use sync
 
+const RESTART_DELAY: Duration = Duration::from_millis(500); // TODO: Find out if this is long enough
+
 const NVS_MAX_STR_LEN: usize = 100;
 const DEFAULT_RESOLUTION_STR: &str = "SVGA";
 const VALID_RESOLUTIONS: [&str; 2] = [DEFAULT_RESOLUTION_STR, "VGA"];
@@ -459,6 +461,8 @@ fn add_setup_form_handler(
 
         // TODO: Restart device after a delay
         info!("Restarting device...");
+        // No sleep here for fast user feedback.
+        // std::thread::sleep(RESTART_DELAY);
         esp_idf_svc::hal::reset::restart();
     })?;
 
@@ -910,7 +914,8 @@ fn handle_event(
         #[allow(clippy::equatable_if_let)] // Makes code more readable
         if let CameraMessage::Restart = camera_message {
             info!("Received WebSocket restart message, restarting...");
-            // TODO: Restart device after a delay
+
+            std::thread::sleep(RESTART_DELAY);
             esp_idf_svc::hal::reset::restart();
         }
     }
