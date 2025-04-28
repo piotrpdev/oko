@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9](https://github.com/piotrpdev/oko/compare/oko-v0.1.8...oko-v0.1.9) - 2025-04-28
+
+### Added
+
+- OKO-107 better camera add, react to camera list changes
+- OKO-107 private oko ip in AppState
+- OKO-107 add camera perms for all users
+
+### Other
+
+- OKO-107 better camera ip parsing in api
+- OKO-107 add ip to `CameraPermissionView`
+
 ## [0.1.8](https://github.com/piotrpdev/oko/compare/oko-v0.1.7...oko-v0.1.8) - 2025-04-26
 
 ### Added
