@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11](https://github.com/piotrpdev/oko/compare/oko-v0.1.10...oko-v0.1.11) - 2025-04-28
+
+### Added
+
+- OKO-109 guest account
+
+### Other
+
+- OKO-109 add guest to fixtures
+
 ## [0.1.10](https://github.com/piotrpdev/oko/compare/oko-v0.1.9...oko-v0.1.10) - 2025-04-28
 
 ### Added
