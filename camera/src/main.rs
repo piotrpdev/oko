@@ -73,7 +73,7 @@ const AP_CAPTIVE_PORTAL_DNS_PORT: u16 = 53;
 const AP_CAPTIVE_PORTAL_BUF_SIZE: usize = 1500;
 const AP_CAPTIVE_PORTAL_DNS_TTL: Duration = Duration::from_secs(300);
 const AP_SETUP_HTML: &str = include_str!("setup.html");
-const AP_MAX_PAYLOAD_LEN: u64 = 256;
+const AP_MAX_PAYLOAD_LEN: u64 = 256; // ! This might be too low, some browsers send huge payloads
 
 const WS_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -101,12 +101,19 @@ pub enum CameraMessage {
 }
 
 #[derive(Deserialize, Debug)]
-struct FormData {
+struct SetupFormData {
     ssid: String,
     pass: String,
     oko: String,
 }
 
+// TODO: Require browser to send randomly generated passcode that will be used as auth for later
+#[derive(Deserialize, Debug)]
+struct MdnsFormData {
+    oko: String,
+}
+
+#[allow(clippy::too_many_lines)] // TODO: Split into smaller functions
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -138,8 +145,7 @@ fn main() -> anyhow::Result<()> {
     let lamp_pin = Arc::new(Mutex::new(lamp_pin_leak));
 
     let setup_details = get_setup_details(&nvs_default_partition)?;
-    let esp_needs_setup = setup_details.ssid.is_empty()
-        || setup_details.pass.is_empty();
+    let esp_needs_setup = setup_details.ssid.is_empty() || setup_details.pass.is_empty();
 
     let saved_camera_settings = get_camera_settings(&nvs_default_partition)?;
 
@@ -351,6 +357,8 @@ fn start_http_server(
 
     // TODO: On fail redirect to error page
 
+    let nvs_default_partition_clone = nvs_default_partition.clone();
+
     if esp_needs_setup {
         info!("Adding single wildcard HTTP captive portal handler");
 
@@ -380,6 +388,42 @@ fn start_http_server(
                 request
                     .into_ok_response()?
                     .write_all(AP_SETUP_HTML.as_bytes())
+            })?
+            // TODO: Maybe remove this handler after oko IP has been set?
+            .fn_handler::<anyhow::Error, _>("/mdns_connect", Method::Post, move |mut request| {
+                // Can this be exploited?
+                let len = request.content_len().unwrap_or(0);
+
+                if len > AP_MAX_PAYLOAD_LEN || len == 0 {
+                    info!("Bad mdns_connect form data payload size: {}", len);
+                    request.into_status_response(413)?.flush()?;
+                    return Ok(());
+                }
+
+                let mut buf = vec![0; len.try_into()?];
+                request.read_exact(&mut buf)?;
+
+                info!(
+                    "Received mdns_connect form data (length: {}): {:?}",
+                    len,
+                    String::from_utf8(buf.clone())?
+                );
+
+                let form = serde_urlencoded::from_bytes::<MdnsFormData>(&buf)?;
+                info!("Mdns form details: Oko: {}", form.oko);
+
+                validate_oko_ip(&form.oko)?;
+                info!("Oko IP is valid");
+
+                save_oko_ip(&nvs_default_partition_clone, &form.oko)?;
+
+                let mut response = request.into_ok_response()?;
+                response.write_all(b"restarting")?;
+                response.flush()?;
+
+                info!("Restarting device...");
+                std::thread::sleep(RESTART_DELAY);
+                esp_idf_svc::hal::reset::restart();
             })?
             .fn_handler::<anyhow::Error, _>("/image", Method::Get, move |request| {
                 let camera_lock = camera
@@ -444,7 +488,7 @@ fn add_setup_form_handler(
             String::from_utf8(buf.clone())?
         );
 
-        let form = serde_urlencoded::from_bytes::<FormData>(&buf)?;
+        let form = serde_urlencoded::from_bytes::<SetupFormData>(&buf)?;
         info!(
             "Setup form details: SSID: {}, Pass: {}, Oko: {}",
             form.ssid, form.pass, form.oko
@@ -455,11 +499,12 @@ fn add_setup_form_handler(
 
         save_setup_details(&nvs_default_partition, &form)?;
 
-        request
-            .into_response(301, None, &[("Location", &(setup_location + "#success"))])?
-            .flush()?;
+        // TODO: Test this redirect more, it fails a lot of the time
+        let mut response =
+            request.into_response(301, None, &[("Location", &(setup_location + "#success"))])?;
+        response.write_all(b"restarting")?;
+        response.flush()?;
 
-        // TODO: Restart device after a delay
         info!("Restarting device...");
         // No sleep here for fast user feedback.
         // std::thread::sleep(RESTART_DELAY);
@@ -469,25 +514,11 @@ fn add_setup_form_handler(
     Ok(())
 }
 
-fn validate_form_data(form: &FormData) -> anyhow::Result<()> {
-    // ? Maybe use <String>.chars().count() instead of .len()
-    // https://paginas.fe.up.pt/~jaime/0506/SSR/802.11i-2004.pdf
-
-    // SSID is basically arbitrary data, spec says pretty much anything is allowed (hopefully no exploit here)
-    let ssid_param = form.ssid.trim().to_string();
-    if !(1..=32).contains(&ssid_param.len()) {
-        bail!("SSID length is invalid");
-    }
-
-    let pass_param = form.pass.trim().to_string();
-    if !(8..=63).contains(&pass_param.len()) {
-        bail!("Password length is invalid");
-    }
-
-    // Oko IP e.g. 192.168.0.28:8080
-    // TODO: Switch to Regex, assuming it can run reliably on ESP32
-    // X.X.X.X:X -> XXX.XXX.XXX.XXX:XXXXX
-    let oko_param = form.oko.trim().to_string();
+// Oko IP e.g. 192.168.0.28:8080
+// TODO: Switch to Regex, assuming it can run reliably on ESP32
+// X.X.X.X:X -> XXX.XXX.XXX.XXX:XXXXX
+fn validate_oko_ip(oko_str: &str) -> anyhow::Result<()> {
+    let oko_param = oko_str.trim().to_string();
     if !oko_param
         .chars()
         .all(|c| c.is_ascii() && !c.is_whitespace())
@@ -537,9 +568,29 @@ fn validate_form_data(form: &FormData) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_form_data(form: &SetupFormData) -> anyhow::Result<()> {
+    // ? Maybe use <String>.chars().count() instead of .len()
+    // https://paginas.fe.up.pt/~jaime/0506/SSR/802.11i-2004.pdf
+
+    // SSID is basically arbitrary data, spec says pretty much anything is allowed (hopefully no exploit here)
+    let ssid_param = form.ssid.trim().to_string();
+    if !(1..=32).contains(&ssid_param.len()) {
+        bail!("SSID length is invalid");
+    }
+
+    let pass_param = form.pass.trim().to_string();
+    if !(8..=63).contains(&pass_param.len()) {
+        bail!("Password length is invalid");
+    }
+
+    validate_oko_ip(&form.oko)?;
+
+    Ok(())
+}
+
 fn get_setup_details(
     nvs_default_partition: &EspNvsPartition<NvsDefault>,
-) -> anyhow::Result<FormData> {
+) -> anyhow::Result<SetupFormData> {
     info!("Getting setup details");
     let nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
 
@@ -563,16 +614,29 @@ fn get_setup_details(
         .trim()
         .trim_matches(char::from(0));
 
-    Ok(FormData {
+    Ok(SetupFormData {
         ssid: ssid.to_string(),
         pass: pass.to_string(),
         oko: oko.to_string(),
     })
 }
 
+fn save_oko_ip(
+    nvs_default_partition: &EspNvsPartition<NvsDefault>,
+    oko_ip: &str,
+) -> anyhow::Result<()> {
+    info!("Saving Oko IP details");
+    let mut nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
+
+    info!("Setting raw Oko ip data");
+    nvs.set_raw(PREFERENCES_KEY_OKO, oko_ip.trim().as_bytes())?;
+
+    Ok(())
+}
+
 fn save_setup_details(
     nvs_default_partition: &EspNvsPartition<NvsDefault>,
-    form: &FormData,
+    form: &SetupFormData,
 ) -> anyhow::Result<()> {
     info!("Saving setup details");
     let mut nvs = EspNvs::new(nvs_default_partition.clone(), PREFERENCES_NAMESPACE, true)?;
@@ -785,7 +849,7 @@ fn start_websocket_client(
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
     framerate: i64,
     nvs_default_partition: EspNvsPartition<NvsDefault>,
-    form: FormData,
+    form: SetupFormData,
 ) -> anyhow::Result<WebSocketClient> {
     // Sets stack size to CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT, config is not inherited across threads.
     task::thread::ThreadSpawnConfiguration::default().set()?;
@@ -823,7 +887,7 @@ fn websocket_client_task(
     lamp_pin: Arc<Mutex<PinDriver<'static, gpio::Gpio4, gpio::Output>>>, // TODO: Use a more generic type
     framerate: i64,
     nvs_default_partition: EspNvsPartition<NvsDefault>,
-    form: FormData,
+    form: SetupFormData,
 ) -> anyhow::Result<()> {
     block_on(async {
         info!("Starting WebSocket client");
