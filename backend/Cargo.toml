@@ -45,7 +45,7 @@ mdns = { package = "oko-mdns", version = "5.2.5" } # This fork adds back tokio s
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 async-stream = "0.3.6"
 reqwest = { version = "0.12.15", default-features = false }
-local-ip-address = "0.6.3"
+local-ip-address = "=0.6.3"
 
 [dev-dependencies]
 playwright = { version = "0.0.20", default-features = false, features = ["rt-tokio"] }
