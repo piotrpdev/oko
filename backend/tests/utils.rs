@@ -64,6 +64,7 @@ pub async fn setup(
         db: pool.clone(),
         listener,
         video_path: video_pathbuf,
+        oko_private_socket_addr: None,
     };
     tokio::spawn(app.serve());
 

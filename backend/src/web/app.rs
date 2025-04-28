@@ -90,12 +90,14 @@ pub struct AppState {
     pub api_channel: watch::Sender<ApiChannelMessage>,
     pub mdns_channel: watch::Sender<MdnsChannelMessage>,
     pub shutdown_token: CancellationToken,
+    pub oko_private_socket_addr: Option<SocketAddr>,
 }
 
 pub struct App {
     pub db: SqlitePool,
     pub listener: TcpListener,
     pub video_path: PathBuf,
+    pub oko_private_socket_addr: Option<SocketAddr>,
 }
 
 impl App {
@@ -123,10 +125,14 @@ impl App {
 
         debug!("Video path: {:?}", video_path);
 
+        // Private IPv4 e.g. 192.168.x.x with port for passing to camera
+        let oko_private_socket_addr = SocketAddr::from((local_ip_address::local_ip()?, listener.local_addr()?.port()));
+
         Ok(Self {
             db,
             listener,
             video_path,
+            oko_private_socket_addr: Some(oko_private_socket_addr),
         })
     }
 
@@ -194,6 +200,7 @@ impl App {
             api_channel: api_channel.clone(),
             mdns_channel: mdns_channel.clone(),
             shutdown_token: shutdown_token.clone(),
+            oko_private_socket_addr: self.oko_private_socket_addr,
         });
 
         let mdns_task = tokio::spawn(async move {
