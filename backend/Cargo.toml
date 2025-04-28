@@ -3,7 +3,7 @@ members = ["utils/camera-impersonator", "utils/ws-utils"]
 
 [package]
 name = "oko"
-version = "0.1.9"
+version = "0.1.10"
 authors = ["Piotr Placzek <piotrpdev@gmail.com>"]
 edition = "2021"
 rust-version = "1.73"
