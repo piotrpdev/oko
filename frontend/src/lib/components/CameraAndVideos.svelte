@@ -8,13 +8,27 @@
   import { onDestroy, onMount } from "svelte";
   import * as Table from "$lib/components/ui/table/index.js";
   import { socket } from "$lib/stores/socketStore";
-  import { isImageContainer, type VideoCameraView } from "../../types";
-
-  export let cameraId: number;
-  export let cameraName: string;
+  import {
+    isImageContainer,
+    type ImageContainer,
+    type VideoCameraView,
+  } from "../../types";
 
   let frameCount = 0;
   let imgSrc: string = "";
+
+  export let cameraId: number;
+  export let cameraName: string;
+  export const processImage = (image_bytes: ImageContainer["image_bytes"]) => {
+    frameCount++;
+    const bytes = new Uint8Array(image_bytes);
+    const blob = new Blob([bytes], { type: "image/jpeg" });
+    const url = URL.createObjectURL(blob);
+    if (imgSrc !== "") {
+      URL.revokeObjectURL(imgSrc);
+    }
+    imgSrc = url;
+  };
 
   // Needed to reset the frame count and image source when the camera changes
   $: ((_cameraId) => {
@@ -37,39 +51,6 @@
       throw new Error("Failed to fetch videos");
     }
   }
-
-  function onMessage(event: MessageEvent) {
-    const data = event.data;
-
-    try {
-      const parsed_msg = JSON.parse(data);
-
-      if (isImageContainer(parsed_msg)) {
-        if (parsed_msg.camera_id !== cameraId) {
-          return;
-        }
-
-        frameCount++;
-        const bytes = new Uint8Array(parsed_msg.image_bytes);
-        const blob = new Blob([bytes], { type: "image/jpeg" });
-        const url = URL.createObjectURL(blob);
-        if (imgSrc !== "") {
-          URL.revokeObjectURL(imgSrc);
-        }
-        imgSrc = url;
-      }
-    } catch (e) {
-      console.error("Failed to parse WebSocket message JSON");
-    }
-  }
-
-  onMount(() => {
-    $socket?.addEventListener("message", onMessage);
-  });
-
-  onDestroy(() => {
-    $socket?.removeEventListener("message", onMessage);
-  });
 </script>
 
 <Card.Root>

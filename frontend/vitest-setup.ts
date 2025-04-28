@@ -203,6 +203,7 @@ export const handlers = [
   }),
   api_ws.addEventListener("connection", async ({ client }) => {
     console.log("WebSocket connection established");
+    await timeoutPromise(100);
     // https://stackoverflow.com/a/16245768/19020549
     testImgContainer1.camera_id = 2;
     client.send(JSON.stringify(testImgContainer1));

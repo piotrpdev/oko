@@ -77,3 +77,31 @@ export function isImageContainer(obj: unknown): obj is ImageContainer {
     Array.isArray(obj.image_bytes)
   );
 }
+
+export type CameraListChangeType = "Added" | "Removed" | "Updated";
+
+export type CameraListChangeCamera = {
+  camera_id: number;
+};
+
+export type CameraListChange = {
+  [key in CameraListChangeType]?: CameraListChangeCamera;
+};
+
+export function isCameraListChange(obj: unknown): obj is CameraListChange {
+  return (
+    obj instanceof Object &&
+    (("Added" in obj &&
+      obj.Added instanceof Object &&
+      "camera_id" in obj.Added &&
+      typeof obj.Added.camera_id === "number") ||
+      ("Removed" in obj &&
+        obj.Removed instanceof Object &&
+        "camera_id" in obj.Removed &&
+        typeof obj.Removed.camera_id === "number") ||
+      ("Updated" in obj &&
+        obj.Updated instanceof Object &&
+        "camera_id" in obj.Updated &&
+        typeof obj.Updated.camera_id === "number"))
+  );
+}

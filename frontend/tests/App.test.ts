@@ -2,7 +2,6 @@ import { fireEvent, render, waitFor } from "@testing-library/svelte";
 import { describe, test, expect } from "vitest";
 import Home from "../src/routes/Home.svelte";
 import Cameras from "../src/routes/Cameras.svelte";
-import CameraAndVideos from "../src/lib/components/CameraAndVideos.svelte";
 import Login from "../src/routes/Login.svelte";
 import { get, Writable } from "svelte/store";
 import { socket } from "../src/lib/stores/socketStore";
@@ -58,14 +57,29 @@ describe("Cameras page", () => {
     user.set(testUserAndCameras);
     socket.set(new WebSocket("ws://localhost:3000/api/ws"));
 
-    const { getByAltText } = render(CameraAndVideos, {
-      cameraId: 2,
-      cameraName: "Kitchen",
+    const { queryByAltText, queryByText } = render(Cameras);
+
+    let cameraLink: HTMLElement | null = null;
+
+    await waitFor(() => {
+      cameraLink = queryByText(testCameras[1].camera_name);
+      expect(cameraLink).toBeInTheDocument();
     });
 
-    const liveFeedImg = getByAltText(liveFeedAltText);
+    expect((cameraLink as unknown as HTMLButtonElement)?.tagName).toBe(
+      "BUTTON",
+    );
+    await fireEvent.click(cameraLink as unknown as HTMLButtonElement);
 
-    expect(liveFeedImg).toBeInTheDocument();
+    let _liveFeedImg: HTMLElement | null = null;
+
+    await waitFor(() => {
+      _liveFeedImg = queryByAltText(liveFeedAltText);
+      expect(_liveFeedImg).toBeInTheDocument();
+    });
+
+    const liveFeedImg = _liveFeedImg as unknown as HTMLImageElement;
+
     expect(liveFeedImg.getAttribute("src")).toBe(null);
 
     let liveFeedImgSrc: string | null = null;
