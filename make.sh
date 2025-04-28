@@ -17,7 +17,7 @@ case "$1" in
         ;;
     "run")
         cd $FRONTEND_DIR
-        npm run build
+        NODE_ENV=development npm run build -- --mode development
 
         cd ../$BACKEND_DIR
         mkdir -p static
@@ -26,8 +26,8 @@ case "$1" in
         ;;
     "t")
         cd $FRONTEND_DIR
-        npm run build
-        npm run test
+        NODE_ENV=development npm run build -- --mode development
+        NODE_ENV=development npm run test -- --mode development
 
         cd ../$BACKEND_DIR
         mkdir -p static
