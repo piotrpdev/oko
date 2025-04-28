@@ -18,10 +18,13 @@
   import { user } from "../lib/stores/userStore";
   import DashboardLayout from "$lib/layouts/DashboardLayout.svelte";
   import {
+    isCameraListChange,
+    isImageContainer,
     isMdnsCamera,
     type Camera,
     type CameraPermission,
     type CameraSetting,
+    type ImageContainer,
     type MdnsCamera,
   } from "../types";
   import CameraAndVideos from "$lib/components/CameraAndVideos.svelte";
@@ -30,7 +33,8 @@
   import type { Selected } from "bits-ui";
   import { Separator } from "$lib/components/ui/separator";
   import { Switch } from "$lib/components/ui/switch";
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
+  import { socket } from "$lib/stores/socketStore";
 
   let selectedCameraId: number | null = null;
   let selectedCameraName: string | null = null;
@@ -47,7 +51,22 @@
   let addCameraDialogOpen = false;
   let getCamerasPromise = getCameras();
 
-  const refreshCameras = () => (getCamerasPromise = getCameras());
+  const refreshCameras = () => {
+    getCamerasPromise = getCameras();
+    getCamerasPromise.then((cameras) => {
+      const camera = cameras.find(
+        (camera) => camera.camera_id === selectedCameraId,
+      );
+
+      if (!camera) {
+        selectedCameraId = null;
+        selectedCameraName = null;
+        return;
+      }
+
+      selectedCameraName = camera.camera_name;
+    });
+  };
 
   async function getCameras(): Promise<Camera[]> {
     const response = await fetch("/api/cameras");
@@ -311,7 +330,44 @@
     mdnsCamerasSse?.addEventListener("message", onMdnsCamerasSseMessage);
   })(addCameraDialogOpen);
 
-  onDestroy(() => closeMdnsCamerasSse());
+  let processImage:
+    | ((image_bytes: ImageContainer["image_bytes"]) => void)
+    | undefined;
+
+  function onMessage(event: MessageEvent) {
+    const data = event.data;
+
+    try {
+      const parsed_msg = JSON.parse(data);
+
+      if (isImageContainer(parsed_msg)) {
+        if (parsed_msg.camera_id !== selectedCameraId) {
+          return;
+        }
+
+        processImage?.(parsed_msg.image_bytes);
+      } else if (isCameraListChange(parsed_msg)) {
+        console.log("Camera list changed");
+
+        if ($user?.user?.username === "admin") {
+          return;
+        }
+
+        refreshCameras();
+      }
+    } catch (e) {
+      console.error("Failed to parse WebSocket message JSON");
+    }
+  }
+
+  onMount(() => {
+    $socket?.addEventListener("message", onMessage);
+  });
+
+  onDestroy(() => {
+    $socket?.removeEventListener("message", onMessage);
+    closeMdnsCamerasSse();
+  });
 </script>
 
 <DashboardLayout tab="Cameras">
@@ -683,6 +739,7 @@
         <CameraAndVideos
           cameraId={selectedCameraId}
           cameraName={selectedCameraName}
+          bind:processImage
         />
       {/if}
     </div>

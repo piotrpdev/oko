@@ -20,7 +20,6 @@ use opencv::{
     videoio::{VideoWriter, VideoWriterTrait},
 };
 use rust_embed::RustEmbed;
-use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use time::{Duration, OffsetDateTime};
 use tokio::{
@@ -55,7 +54,7 @@ use crate::{
     User, Video,
 };
 
-use super::MdnsChannelMessage;
+use super::{ImageContainer, MdnsChannelMessage};
 
 // TODO: Maybe use `std::future::pending::<()>();` instead of sleeping forever
 
@@ -73,16 +72,6 @@ const EMPTY_TASK_SLEEP_DURATION: tokio::time::Duration = tokio::time::Duration::
 #[derive(RustEmbed, Clone)]
 #[folder = "static/"]
 struct EmbeddedAssets;
-
-// ? Maybe move this somewhere better
-// TODO: Probably change to Protobuf or bincode instead of JSON
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ImageContainer {
-    pub camera_id: i64,
-    pub timestamp: i64,
-    #[serde(with = "serde_bytes")]
-    pub image_bytes: Vec<u8>,
-}
 
 pub struct AppState {
     pub images_tx: watch::Sender<ImageContainer>,
@@ -669,11 +658,11 @@ async fn handle_socket(
     });
 
     let api_channel = state.api_channel.clone();
+    let sender_mutex_clone = sender_mutex.clone();
     let mut first_received = false;
 
     let mut api_listener_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if is_camera {
-            let sender_mutex_clone = sender_mutex.clone();
             tokio::spawn(async move {
                 if let Some(some_camera_settings) = initial_camera_settings {
                     let some_initial_camera_settings = CameraSettingNoMeta {
@@ -757,13 +746,22 @@ async fn handle_socket(
                         #[allow(clippy::single_match)] // will change in the future
                         match api_msg {
                             // TODO: every user task performing this is wasteful, global camera list mutex shared with api would be better
-                            ApiChannelMessage::CameraListChanged(_) => {
+                            ApiChannelMessage::CameraListChanged(change) => {
                                 info!("API channel message received for camera list changed for {who}...");
 
                                 let Some(user_id_some) = user_id else {
                                     error!("Camera list changed but user was not found in auth_session. How is this even possible?");
                                     break;
                                 };
+
+                                if let Err(e) = sender_mutex_clone
+                                    .lock()
+                                    .await
+                                    .send(Message::Text(serde_json::to_string(&change)?))
+                                    .await
+                                {
+                                    error!("Error sending API WebSocket message to {who}: {e:?}");
+                                }
 
                                 let Ok(new_cameras) = Camera::list_accessible_to_user(
                                     &auth_session.backend.db,

@@ -1,10 +1,17 @@
 pub use app::App;
 pub use app::AppState;
-pub use app::ImageContainer;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::CameraSettingNoMeta;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ImageContainer {
+    pub camera_id: i64,
+    pub timestamp: i64,
+    #[serde(with = "serde_bytes")]
+    pub image_bytes: Vec<u8>,
+}
 
 // TODO: Use single shared definition for both camera and backend
 #[derive(Serialize, Deserialize, Debug, Clone)]
