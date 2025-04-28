@@ -350,7 +350,7 @@
             </Button>
             <div class="flex gap-3">
               <!-- TODO: Check if user has permissions to control instead of being admin -->
-              {#if $user?.user?.username === "admin"}
+              {#if camera.can_control}
                 <Dialog.Root
                   onOpenChange={(isOpen) =>
                     editCameraDialogOpenChange(isOpen, camera.camera_id)}
@@ -369,70 +369,72 @@
                       <Dialog.Header>
                         <Dialog.Title>Edit Camera</Dialog.Title>
                       </Dialog.Header>
-                      <div class="grid gap-4 pt-4">
-                        <h4 class="text-sm font-medium">User Permissions</h4>
-                        {#await getPermissionsPromise}
-                          <!-- TODO: Use skeletons -->
-                          <span class="px-3 py-0 text-muted-foreground"
-                            >Loading...</span
-                          >
-                        {:then permissions}
-                          {#each permissions.filter((p) => p.username !== "admin") as permission}
-                            <div class="flex items-center justify-between">
-                              <div class="flex items-center space-x-4">
-                                <Avatar.Root>
-                                  <Avatar.Image alt={permission.username} />
-                                  <Avatar.Fallback
-                                    >{permission.username
-                                      .substring(0, 2)
-                                      .toUpperCase()}</Avatar.Fallback
-                                  >
-                                </Avatar.Root>
-                                <div>
-                                  <p class="text-sm font-medium leading-none">
-                                    {permission.username}
-                                  </p>
+                      {#if $user?.user?.username === "admin"}
+                        <div class="grid gap-4 pt-4">
+                          <h4 class="text-sm font-medium">User Permissions</h4>
+                          {#await getPermissionsPromise}
+                            <!-- TODO: Use skeletons -->
+                            <span class="px-3 py-0 text-muted-foreground"
+                              >Loading...</span
+                            >
+                          {:then permissions}
+                            {#each permissions.filter((p) => p.username !== "admin") as permission}
+                              <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                  <Avatar.Root>
+                                    <Avatar.Image alt={permission.username} />
+                                    <Avatar.Fallback
+                                      >{permission.username
+                                        .substring(0, 2)
+                                        .toUpperCase()}</Avatar.Fallback
+                                    >
+                                  </Avatar.Root>
+                                  <div>
+                                    <p class="text-sm font-medium leading-none">
+                                      {permission.username}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                              <Select.Root
-                                selected={userRoleOptions.find(
-                                  (option) =>
-                                    option.label ===
-                                    permissionToRole(permission),
-                                )}
-                                onSelectedChange={(selected) =>
-                                  onPermissionChange(permission, selected)}
-                              >
-                                <Select.Trigger
-                                  aria-label="Edit User Camera Permission"
-                                  data-permission-id={permission.permission_id}
-                                  class="w-[120px]"
+                                <Select.Root
+                                  selected={userRoleOptions.find(
+                                    (option) =>
+                                      option.label ===
+                                      permissionToRole(permission),
+                                  )}
+                                  onSelectedChange={(selected) =>
+                                    onPermissionChange(permission, selected)}
                                 >
-                                  <Select.Value
-                                    aria-label="Current User Camera Permission"
+                                  <Select.Trigger
+                                    aria-label="Edit User Camera Permission"
                                     data-permission-id={permission.permission_id}
-                                    placeholder="Role"
-                                  />
-                                </Select.Trigger>
-                                <Select.Content>
-                                  <Select.Group>
-                                    {#each userRoleOptions as userRole}
-                                      <Select.Item
-                                        value={userRole.value}
-                                        label={userRole.label}
-                                        >{userRole.label}</Select.Item
-                                      >
-                                    {/each}
-                                  </Select.Group>
-                                </Select.Content>
-                              </Select.Root>
-                            </div>
-                          {/each}
-                        {:catch error}
-                          <p>{error.message}</p>
-                        {/await}
-                      </div>
-                      <Separator class="my-2" />
+                                    class="w-[120px]"
+                                  >
+                                    <Select.Value
+                                      aria-label="Current User Camera Permission"
+                                      data-permission-id={permission.permission_id}
+                                      placeholder="Role"
+                                    />
+                                  </Select.Trigger>
+                                  <Select.Content>
+                                    <Select.Group>
+                                      {#each userRoleOptions as userRole}
+                                        <Select.Item
+                                          value={userRole.value}
+                                          label={userRole.label}
+                                          >{userRole.label}</Select.Item
+                                        >
+                                      {/each}
+                                    </Select.Group>
+                                  </Select.Content>
+                                </Select.Root>
+                              </div>
+                            {/each}
+                          {:catch error}
+                            <p>{error.message}</p>
+                          {/await}
+                        </div>
+                        <Separator class="my-2" />
+                      {/if}
                       <div class="grid gap-4">
                         <h4 class="text-sm font-medium">Settings</h4>
                         {#await getSettingsPromise}
@@ -559,16 +561,18 @@
                   </Dialog.Content>
                 </Dialog.Root>
               {/if}
-              <Button
-                on:click={() => removeCamera(camera.camera_id)}
-                variant="ghost"
-                size="icon"
-                aria-label="Remove Camera"
-                data-camera-id={camera.camera_id}
-                class="ml-auto flex h-4 w-4 shrink-0 items-center justify-center transition-all group-hover:opacity-100 md:opacity-0"
-              >
-                <Trash class="h-4 w-4" />
-              </Button>
+              {#if $user?.user?.username === "admin"}
+                <Button
+                  on:click={() => removeCamera(camera.camera_id)}
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Remove Camera"
+                  data-camera-id={camera.camera_id}
+                  class="ml-auto flex h-4 w-4 shrink-0 items-center justify-center transition-all group-hover:opacity-100 md:opacity-0"
+                >
+                  <Trash class="h-4 w-4" />
+                </Button>
+              {/if}
             </div>
           </div>
         {/each}
