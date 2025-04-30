@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12](https://github.com/piotrpdev/oko/compare/oko-v0.1.11...oko-v0.1.12) - 2025-04-30
+
+### Added
+
+- OKO-110 users api routes
+
 ## [0.1.11](https://github.com/piotrpdev/oko/compare/oko-v0.1.10...oko-v0.1.11) - 2025-04-28
 
 ### Added
