@@ -34,3 +34,6 @@ backend/rust-toolchain.toml
 
 .embuild
 backend/.env
+
+backend/certs/*.key
+backend/certs/*.crt
