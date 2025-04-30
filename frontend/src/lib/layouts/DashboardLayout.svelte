@@ -18,6 +18,10 @@
     { name: "Cameras", href: "/cameras" },
   ];
 
+  if ($user?.user?.username === "admin") {
+    tabs.push({ name: "Users", href: "/users" });
+  }
+
   async function logout() {
     const response = await fetch("/api/logout");
 
