@@ -201,6 +201,9 @@ export const handlers = [
 
     return HttpResponse.json(parsedCameraId);
   }),
+  http.get("/api/guest_exists", () => {
+    return HttpResponse.json(null);
+  }),
   api_ws.addEventListener("connection", async ({ client }) => {
     console.log("WebSocket connection established");
     await timeoutPromise(100);
