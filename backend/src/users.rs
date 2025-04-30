@@ -15,10 +15,9 @@ pub struct Credentials {
     pub password: String,
 }
 
-// TODO: Make db private again and pass db state to Router as layer/state
 #[derive(Debug, Clone)]
 pub struct Backend {
-    pub db: SqlitePool,
+    db: SqlitePool,
 }
 
 impl Backend {

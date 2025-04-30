@@ -63,8 +63,6 @@ const SQLITE_URL: &str = "sqlite://data.db";
 const VIDEO_PATH: &str = "./videos/";
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const DEFAULT_ADMIN_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw";
-const DEFAULT_GUEST_USERNAME: &str = "guest";
-const DEFAULT_GUEST_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw";
 const EXPIRED_SESSION_DELETION_INTERVAL: tokio::time::Duration =
     tokio::time::Duration::from_secs(60);
 const SESSION_DURATION: Duration = Duration::days(1);
@@ -83,6 +81,7 @@ pub struct AppState {
     pub mdns_channel: watch::Sender<MdnsChannelMessage>,
     pub shutdown_token: CancellationToken,
     pub oko_private_socket_addr: Option<SocketAddr>,
+    pub db_pool: SqlitePool,
 }
 
 pub struct App {
@@ -129,6 +128,7 @@ impl App {
         })
     }
 
+    #[allow(clippy::too_many_lines)] // TODO: Refactor
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // ? Maybe make this optional just in case
         let admin_exists = User::get_using_username(&self.db, DEFAULT_ADMIN_USERNAME)
@@ -143,21 +143,6 @@ impl App {
             };
 
             admin.create_using_self(&self.db).await?;
-        }
-
-        // ? Maybe make this optional just in case
-        let guest_exists = User::get_using_username(&self.db, DEFAULT_GUEST_USERNAME)
-            .await
-            .is_ok();
-        if !guest_exists {
-            let mut guest = User {
-                user_id: User::DEFAULT.user_id,
-                username: "guest".to_string(),
-                password_hash: DEFAULT_GUEST_PASS_HASH.to_owned(),
-                created_at: User::DEFAULT.created_at(),
-            };
-
-            guest.create_using_self(&self.db).await?;
         }
 
         // Session layer.
@@ -185,7 +170,7 @@ impl App {
         //
         // This combines the session layer with our backend to establish the auth
         // service which will provide the auth session as a request extension.
-        let backend = Backend::new(self.db);
+        let backend = Backend::new(self.db.clone());
         let auth_layer = AuthManagerLayerBuilder::new(backend, session_layer).build();
 
         let embedded_assets_service = ServeEmbed::<EmbeddedAssets>::new();
@@ -209,6 +194,7 @@ impl App {
             mdns_channel: mdns_channel.clone(),
             shutdown_token: shutdown_token.clone(),
             oko_private_socket_addr: self.oko_private_socket_addr,
+            db_pool: self.db,
         });
 
         let mdns_task = tokio::spawn(async move {
@@ -238,6 +224,7 @@ impl App {
 
         let main_router = Router::new()
             .route("/api/ws", axum::routing::any(ws_handler))
+            .route("/api/guest_exists", axum::routing::get(guest_exists_route))
             .with_state(app_state.clone());
 
         // TODO: Order of merge matters here, make sure the correct routes are protected and that fallback works as intended.
@@ -267,6 +254,15 @@ impl App {
 
         Ok(())
     }
+}
+
+pub async fn guest_exists_route(state: State<Arc<AppState>>) -> impl IntoResponse {
+    let guest_user_result = User::get_using_username(&state.db_pool, "guest").await;
+    if guest_user_result.is_err() {
+        return http::StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    http::StatusCode::OK.into_response()
 }
 
 // ? Maybe move all functions below into App impl block, then use `self` for db pool
@@ -397,7 +393,7 @@ async fn handle_socket(
         // TODO: Maybe find a better way to handle this
         if camera_any_port {
             let Ok(db_camera) =
-                Camera::get_using_ip(&auth_session.backend.db, who.ip().to_string() + ":*").await
+                Camera::get_using_ip(&state.db_pool, who.ip().to_string() + ":*").await
             else {
                 // TODO: Inform client/db if camera not found (both web user and ws connection), also find better way to exit here?
                 error!("Camera (any port) not found in DB, aborting...");
@@ -406,9 +402,7 @@ async fn handle_socket(
 
             camera_id = db_camera.camera_id;
         } else {
-            let Ok(db_camera) =
-                Camera::get_using_ip(&auth_session.backend.db, who.to_string()).await
-            else {
+            let Ok(db_camera) = Camera::get_using_ip(&state.db_pool, who.to_string()).await else {
                 // TODO: Inform client/db if camera not found (both web user and ws connection), also find better way to exit here?
                 error!("Camera not found in DB, aborting...");
                 return;
@@ -417,8 +411,7 @@ async fn handle_socket(
             camera_id = db_camera.camera_id;
         }
 
-        let Ok(camera_settings) =
-            CameraSetting::get_for_camera(&auth_session.backend.db, camera_id).await
+        let Ok(camera_settings) = CameraSetting::get_for_camera(&state.db_pool, camera_id).await
         else {
             error!("Error getting initial camera settings for camera {camera_id}, aborting...");
             return;
@@ -434,8 +427,7 @@ async fn handle_socket(
 
         user_id = Some(user.user_id);
 
-        let Ok(i_cameras) =
-            Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+        let Ok(i_cameras) = Camera::list_accessible_to_user(&state.db_pool, user.user_id).await
         else {
             error!("Error listing cameras for user...");
             return;
@@ -454,7 +446,7 @@ async fn handle_socket(
     // ! Camera restart does not guarantee new recording, frames will keep going to the same video unless socket times out?
     let mut recording_task: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
         if is_camera {
-            let auth_session_clone = auth_session.clone();
+            let state_clone = state.clone();
             // TODO: Check if errors are returned properly here, had some issues with the ? operator being silent
             tracker.spawn(async move {
                 let now = Video::DEFAULT.start_time();
@@ -473,9 +465,7 @@ async fn handle_socket(
                 };
 
                 // ? Maybe don't create video until first frame (or maybe doing this is actually a good approach)?
-                video
-                    .create_using_self(&auth_session_clone.backend.db)
-                    .await?;
+                video.create_using_self(&state_clone.db_pool).await?;
 
                 let (frame_width, frame_height, framerate) = match initial_camera_settings_clone {
                     #[allow(clippy::match_same_arms)] // readability
@@ -547,9 +537,7 @@ async fn handle_socket(
                 video.end_time = Some(OffsetDateTime::now_utc());
                 video.file_size = Some(total_bytes.try_into()?);
 
-                video
-                    .update_using_self(&auth_session_clone.backend.db)
-                    .await?;
+                video.update_using_self(&state_clone.db_pool).await?;
                 info!("Recording finished for {who}...");
 
                 Ok(())
@@ -781,11 +769,9 @@ async fn handle_socket(
                                     error!("Error sending API WebSocket message to {who}: {e:?}");
                                 }
 
-                                let Ok(new_cameras) = Camera::list_accessible_to_user(
-                                    &auth_session.backend.db,
-                                    user_id_some,
-                                )
-                                .await
+                                let Ok(new_cameras) =
+                                    Camera::list_accessible_to_user(&state.db_pool, user_id_some)
+                                        .await
                                 else {
                                     // TODO: prevent potential endless loop here from the DB call always failing
                                     error!("Error listing new cameras for {who}...");

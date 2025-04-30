@@ -6,6 +6,7 @@
 
   import { replace } from "svelte-spa-router";
   import { user } from "../lib/stores/userStore";
+  import { onMount } from "svelte";
 
   const DEFAULT_ADMIN_USERNAME = "admin";
   const DEFAULT_ADMIN_PASSWORD = "hunter42";
@@ -14,6 +15,8 @@
 
   let username = import.meta.env.DEV ? DEFAULT_ADMIN_USERNAME : "";
   let password = import.meta.env.DEV ? DEFAULT_ADMIN_PASSWORD : "";
+
+  let guest_exists = false;
 
   async function handleSubmit() {
     const response = await fetch("/api/login", {
@@ -47,6 +50,16 @@
       console.error("Login failed");
     }
   }
+
+  onMount(async () => {
+    const response = await fetch("/api/guest_exists");
+
+    if (response.ok) {
+      guest_exists = true;
+    } else {
+      console.error("Failed to check guest exists");
+    }
+  });
 </script>
 
 <div class="relative flex min-h-screen flex-col bg-background">
@@ -83,19 +96,21 @@
         </Card.Content>
         <Card.Footer class="flex-col gap-4">
           <Button id="login" class="w-full" type="submit">Sign in</Button>
-          <Button
-            id="login-guest"
-            variant="outline"
-            class="w-full"
-            type="button"
-            on:click={() => {
-              username = DEFAULT_GUEST_USERNAME;
-              password = DEFAULT_GUEST_PASSWORD;
-              handleSubmit();
-            }}
-          >
-            Sign in as Guest
-          </Button>
+          {#if guest_exists}
+            <Button
+              id="login-guest"
+              variant="outline"
+              class="w-full"
+              type="button"
+              on:click={() => {
+                username = DEFAULT_GUEST_USERNAME;
+                password = DEFAULT_GUEST_PASSWORD;
+                handleSubmit();
+              }}
+            >
+              Sign in as Guest
+            </Button>
+          {/if}
         </Card.Footer>
       </form>
     </Card.Root>
