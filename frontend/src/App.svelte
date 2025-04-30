@@ -65,7 +65,9 @@
 
     if ($socket != null) return;
 
-    $socket = new WebSocket(`ws://${window.location.host}/api/ws`);
+    let wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+
+    $socket = new WebSocket(`${wsProtocol}://${window.location.host}/api/ws`);
     $socket?.addEventListener("open", onOpen);
   })();
 
