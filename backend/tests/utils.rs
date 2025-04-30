@@ -62,7 +62,8 @@ pub async fn setup(
 
     let app = App {
         db: pool.clone(),
-        listener,
+        http_listener: listener,
+        https_addr: None,
         video_path: video_pathbuf,
         oko_private_socket_addr: None,
     };

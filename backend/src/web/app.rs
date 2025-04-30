@@ -13,6 +13,7 @@ use axum_login::{
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use opencv::{
     core::Size,
@@ -86,12 +87,14 @@ pub struct AppState {
 
 pub struct App {
     pub db: SqlitePool,
-    pub listener: TcpListener,
+    pub http_listener: TcpListener,
+    pub https_addr: Option<SocketAddr>,
     pub video_path: PathBuf,
     pub oko_private_socket_addr: Option<SocketAddr>,
 }
 
 impl App {
+    #[allow(clippy::similar_names)]
     pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let sqlite_connect_options =
             SqliteConnectOptions::from_str(SQLITE_URL)?.create_if_missing(true);
@@ -100,11 +103,12 @@ impl App {
 
         sqlx::migrate!().run(&db).await?;
 
-        let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 3000));
+        let http_addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 3080));
+        let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
 
-        let listener = tokio::net::TcpListener::bind(addr).await?;
+        let https_addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 3443));
 
-        info!("Listening on: {}", addr);
+        info!("Listening on: {} and {}", http_addr, https_addr);
 
         let video_path_relative = PathBuf::from(VIDEO_PATH);
 
@@ -117,17 +121,21 @@ impl App {
         debug!("Video path: {:?}", video_path);
 
         // Private IPv4 e.g. 192.168.x.x with port for passing to camera
-        let oko_private_socket_addr =
-            SocketAddr::from((local_ip_address::local_ip()?, listener.local_addr()?.port()));
+        let oko_private_socket_addr = SocketAddr::from((
+            local_ip_address::local_ip()?,
+            http_listener.local_addr()?.port(),
+        ));
 
         Ok(Self {
             db,
-            listener,
+            http_listener,
+            https_addr: Some(https_addr),
             video_path,
             oko_private_socket_addr: Some(oko_private_socket_addr),
         })
     }
 
+    #[allow(clippy::similar_names)]
     #[allow(clippy::too_many_lines)] // TODO: Refactor
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // ? Maybe make this optional just in case
@@ -235,22 +243,62 @@ impl App {
             .merge(auth::router())
             .layer(auth_layer);
 
+        let axum_rustls_handle = axum_server::Handle::new();
+
+        let https_addr_clone = self.https_addr;
+        let app_clone = app.clone();
+        let axum_rustls_handle_clone = axum_rustls_handle.clone();
+
+        let https_task = tokio::spawn(async move {
+            let Some(https_addr) = https_addr_clone else {
+                return Ok(());
+            };
+
+            let Ok(tls_config) =
+                RustlsConfig::from_pem_file("./certs/oko.internal.crt", "./certs/oko.internal.key")
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to load TLS config, no HTTPS server will be created: {e:?}");
+                        e
+                    })
+            else {
+                return Ok(());
+            };
+
+            let server = axum_server::bind_rustls(https_addr, tls_config);
+
+            // For some reason, enabling connect protocol causes issues when connecting
+            // server.http_builder().http2().enable_connect_protocol();
+
+            server
+                .handle(axum_rustls_handle_clone)
+                .serve(
+                    app_clone
+                        .clone()
+                        .into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .await
+        });
+
         // Ensure we use a shutdown signal to abort the deletion task.
         axum::serve(
-            self.listener,
+            self.http_listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
         )
         .with_graceful_shutdown(shutdown_signal(
             deletion_task.abort_handle(),
             mdns_task.abort_handle(),
+            axum_rustls_handle,
             shutdown_token,
         ))
         .await?;
 
-        let (mdns_task_result, deletion_task) = tokio::join!(mdns_task, deletion_task);
+        let (mdns_task_result, deletion_task, https_task) =
+            tokio::join!(mdns_task, deletion_task, https_task);
 
         mdns_task_result?;
         deletion_task??;
+        https_task??;
 
         Ok(())
     }
@@ -270,6 +318,7 @@ pub async fn guest_exists_route(state: State<Arc<AppState>>) -> impl IntoRespons
 async fn shutdown_signal(
     deletion_task_abort_handle: AbortHandle,
     mdns_task_abort_handle: AbortHandle,
+    axum_rustls_handle: axum_server::Handle,
     shutdown_token: CancellationToken,
 ) {
     let ctrl_c = async {
@@ -297,11 +346,13 @@ async fn shutdown_signal(
             deletion_task_abort_handle.abort();
             shutdown_token.cancel();
             mdns_task_abort_handle.abort();
+            axum_rustls_handle.shutdown();
         },
         () = terminate => {
             deletion_task_abort_handle.abort();
             shutdown_token.cancel();
             mdns_task_abort_handle.abort();
+            axum_rustls_handle.shutdown();
         },
     }
 }
