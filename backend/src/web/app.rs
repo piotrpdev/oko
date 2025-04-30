@@ -60,7 +60,8 @@ use super::{ImageContainer, MdnsChannelMessage};
 // TODO: Maybe use `std::future::pending::<()>();` instead of sleeping forever
 
 // TODO: Change default admin and guest hashes, remember to search and update where they're hardcoded
-const SQLITE_URL: &str = "sqlite://data.db";
+const SQLITE_PROD_URL: &str = "sqlite://oko.db";
+const SQLITE_DEV_URL: &str = "sqlite://data.db";
 const VIDEO_PATH: &str = "./videos/";
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const DEFAULT_ADMIN_PASS_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$VE0e3g7DalWHgDwou3nuRA$uC6TER156UQpk0lNQ5+jHM0l5poVjPA1he/Tyn9J4Zw";
@@ -94,10 +95,25 @@ pub struct App {
 }
 
 impl App {
+    #[allow(clippy::cognitive_complexity)]
     #[allow(clippy::similar_names)]
     pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let sqlite_connect_options =
-            SqliteConnectOptions::from_str(SQLITE_URL)?.create_if_missing(true);
+        let sqlite_connect_options = if cfg!(debug_assertions) {
+            SqliteConnectOptions::from_str(SQLITE_DEV_URL)?.create_if_missing(true)
+        } else {
+            let Ok(password) = std::env::var("OKO_DB_PASSWORD") else {
+                error!("No password provided for database. Please provide a password using the OKO_DB_PASSWORD environment variable.");
+                return Err("No password provided for database. Please provide a password using the OKO_DB_PASSWORD environment variable.".into());
+            };
+
+            SqliteConnectOptions::from_str(SQLITE_PROD_URL)?
+                .create_if_missing(true)
+                .pragma("key", password)
+                .pragma("cipher_page_size", "1024")
+                .pragma("kdf_iter", "64000")
+                .pragma("cipher_hmac_algorithm", "HMAC_SHA1")
+                .pragma("cipher_kdf_algorithm", "PBKDF2_HMAC_SHA1")
+        };
 
         let db = SqlitePool::connect_with(sqlite_connect_options).await?;
 
