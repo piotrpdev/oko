@@ -18,6 +18,10 @@
     { name: "Cameras", href: "/cameras" },
   ];
 
+  if ($user?.user?.username === "admin") {
+    tabs.push({ name: "Users", href: "/users" });
+  }
+
   async function logout() {
     const response = await fetch("/api/logout");
 
@@ -97,10 +101,7 @@
           </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Content id="user-menu" align="end">
-          <DropdownMenu.Label>My Account</DropdownMenu.Label>
-          <DropdownMenu.Separator />
-          <DropdownMenu.Item>Settings</DropdownMenu.Item>
-          <DropdownMenu.Item>Support</DropdownMenu.Item>
+          <DropdownMenu.Label>{$user?.user?.username}</DropdownMenu.Label>
           <DropdownMenu.Separator />
           <DropdownMenu.Item id="logout" on:click={logout}
             >Logout</DropdownMenu.Item

@@ -36,11 +36,14 @@
   import { onDestroy, onMount } from "svelte";
   import { socket } from "$lib/stores/socketStore";
 
+  const DEFAULT_CAMERA_NAME = "Backyard";
+  const DEFAULT_CAMERA_ADDRESS = "192.168.0.30";
+
   let selectedCameraId: number | null = null;
   let selectedCameraName: string | null = null;
 
-  let name = "Backyard";
-  let address = "192.168.0.30";
+  let name = import.meta.env.DEV ? DEFAULT_CAMERA_NAME : "";
+  let address = import.meta.env.DEV ? DEFAULT_CAMERA_ADDRESS : "";
 
   // TODO: Refresh cameras on add/remove
   // TODO: Better indication that "Save Settings" button isn't needed for "User Permissions"
@@ -311,6 +314,7 @@
     mdnsCamerasSse = null;
   }
 
+  // TODO: move contents to editCameraDialogOpenChange ?
   $: (async (_addCameraDialogOpen) => {
     // Need this for tests to run correctly
     if (typeof EventSource === "undefined") {

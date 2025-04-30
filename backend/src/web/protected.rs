@@ -42,6 +42,10 @@ pub fn router(app_state: Arc<AppState>) -> Router<()> {
             post(self::post::camera_restart),
         )
         .route("/api/mdns_cameras_sse", get(self::get::mdns_cameras_sse))
+        .route("/api/users", get(self::get::users))
+        .route("/api/users", post(self::post::users))
+        .route("/api/users/:user_id", patch(self::patch::users))
+        .route("/api/users/:user_id", delete(self::delete::users))
         .with_state(app_state)
 }
 
@@ -74,12 +78,15 @@ mod get {
         cameras: Vec<CameraPermissionView>,
     }
 
-    pub async fn protected(auth_session: AuthSession) -> impl IntoResponse {
+    pub async fn protected(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+    ) -> impl IntoResponse {
         match auth_session.user {
             Some(user) => {
                 // TODO: Handle different error types
                 let Ok(cameras) =
-                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+                    Camera::list_accessible_to_user(&state.db_pool, user.user_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -98,11 +105,14 @@ mod get {
         }
     }
 
-    pub async fn cameras(auth_session: AuthSession) -> impl IntoResponse {
+    pub async fn cameras(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+    ) -> impl IntoResponse {
         match auth_session.user {
             Some(user) => {
                 let Ok(cameras) =
-                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+                    Camera::list_accessible_to_user(&state.db_pool, user.user_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -115,12 +125,13 @@ mod get {
 
     pub async fn videos_for_camera(
         auth_session: AuthSession,
+        state: State<Arc<AppState>>,
         Path(camera_id): Path<i64>,
     ) -> impl IntoResponse {
         match auth_session.user {
             Some(user) => {
                 let Ok(cameras) =
-                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+                    Camera::list_accessible_to_user(&state.db_pool, user.user_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -129,8 +140,7 @@ mod get {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
-                let Ok(videos) = Video::list_for_camera(&auth_session.backend.db, camera_id).await
-                else {
+                let Ok(videos) = Video::list_for_camera(&state.db_pool, camera_id).await else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
 
@@ -141,11 +151,14 @@ mod get {
     }
 
     // Code copied from: https://github.com/tokio-rs/axum/discussions/608
-    pub async fn video(auth_session: AuthSession, Path(video_id): Path<i64>) -> impl IntoResponse {
+    pub async fn video(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+        Path(video_id): Path<i64>,
+    ) -> impl IntoResponse {
         match auth_session.user {
             Some(user) => {
-                let Ok(video) = Video::get_using_id(&auth_session.backend.db, video_id).await
-                else {
+                let Ok(video) = Video::get_using_id(&state.db_pool, video_id).await else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
 
@@ -154,7 +167,7 @@ mod get {
                 };
 
                 let Ok(cameras) =
-                    Camera::list_accessible_to_user(&auth_session.backend.db, user.user_id).await
+                    Camera::list_accessible_to_user(&state.db_pool, user.user_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -192,6 +205,7 @@ mod get {
 
     pub async fn camera_permissions(
         auth_session: AuthSession,
+        state: State<Arc<AppState>>,
         Path(camera_id): Path<i64>,
     ) -> impl IntoResponse {
         match auth_session.user {
@@ -200,11 +214,9 @@ mod get {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
-                let Ok(permissions) = CameraPermission::list_for_camera_with_username(
-                    &auth_session.backend.db,
-                    camera_id,
-                )
-                .await
+                let Ok(permissions) =
+                    CameraPermission::list_for_camera_with_username(&state.db_pool, camera_id)
+                        .await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -217,12 +229,12 @@ mod get {
 
     pub async fn camera_settings(
         auth_session: AuthSession,
+        state: State<Arc<AppState>>,
         Path(camera_id): Path<i64>,
     ) -> impl IntoResponse {
         match auth_session.user {
             Some(_) => {
-                let Ok(settings) =
-                    CameraSetting::get_for_camera(&auth_session.backend.db, camera_id).await
+                let Ok(settings) = CameraSetting::get_for_camera(&state.db_pool, camera_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -293,6 +305,26 @@ mod get {
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
+
+    pub async fn users(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                let Ok(users) = User::get_all(&state.db_pool).await else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                Json(users).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
 }
 
 // TODO: Don't always return the same error
@@ -308,7 +340,9 @@ mod post {
     use axum::extract::{Path, State};
     use axum::Form;
     use axum::Json;
+    use password_auth::generate_hash;
     use serde::Deserialize;
+    use tokio::task;
     use tracing::debug;
 
     #[derive(Debug, Clone, Deserialize)]
@@ -405,7 +439,7 @@ mod post {
                     is_active: Camera::DEFAULT.is_active,
                 };
 
-                if (camera.create_using_self(&auth_session.backend.db).await).is_err() {
+                if (camera.create_using_self(&state.db_pool).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
@@ -419,11 +453,7 @@ mod post {
                     modified_by: Some(user.user_id),
                 };
 
-                if (camera_setting
-                    .create_using_self(&auth_session.backend.db)
-                    .await)
-                    .is_err()
-                {
+                if (camera_setting.create_using_self(&state.db_pool).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
@@ -436,14 +466,14 @@ mod post {
                 };
 
                 if (admin_camera_permission
-                    .create_using_self(&auth_session.backend.db)
+                    .create_using_self(&state.db_pool)
                     .await)
                     .is_err()
                 {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
-                let Ok(all_users) = User::get_all(&auth_session.backend.db).await else {
+                let Ok(all_users) = User::get_all(&state.db_pool).await else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
 
@@ -461,11 +491,7 @@ mod post {
                         can_control: false,
                     };
 
-                    if (camera_permission
-                        .create_using_self(&auth_session.backend.db)
-                        .await)
-                        .is_err()
-                    {
+                    if (camera_permission.create_using_self(&state.db_pool).await).is_err() {
                         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                     }
                 }
@@ -513,6 +539,97 @@ mod post {
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct UserForm {
+        pub username: String,
+        pub password: String,
+    }
+
+    pub async fn users(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+        Form(user_form): Form<UserForm>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                if !user_form.username.is_ascii()
+                    || !user_form
+                        .username
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric())
+                {
+                    return StatusCode::BAD_REQUEST.into_response();
+                }
+
+                let Err(sqlx::Error::RowNotFound) =
+                    User::get_using_username(&state.db_pool, &user_form.username).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                let user_form = if user_form.username == "guest" {
+                    UserForm {
+                        username: "guest".to_string(),
+                        password: "hunter42".to_string(), // TODO: move this
+                    }
+                } else {
+                    user_form
+                };
+
+                if user_form.password.len() > 254
+                    || user_form.password.is_empty()
+                    || user_form.password.contains(char::is_whitespace)
+                {
+                    return StatusCode::BAD_REQUEST.into_response();
+                }
+
+                let Ok(password_hash) =
+                    task::spawn_blocking(|| generate_hash(user_form.password)).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                let mut new_user = User {
+                    user_id: User::DEFAULT.user_id,
+                    username: user_form.username,
+                    password_hash,
+                    created_at: User::DEFAULT.created_at(),
+                };
+
+                if (new_user.create_using_self(&state.db_pool).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                let Ok(all_cameras) =
+                    Camera::list_accessible_to_user(&state.db_pool, user.user_id).await
+                else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                for camera in all_cameras {
+                    let mut camera_permission = CameraPermission {
+                        permission_id: CameraPermission::DEFAULT.permission_id,
+                        camera_id: camera.camera_id,
+                        user_id: new_user.user_id,
+                        can_view: false,
+                        can_control: false,
+                    };
+
+                    if (camera_permission.create_using_self(&state.db_pool).await).is_err() {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                }
+
+                Json(new_user).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
 }
 
 // TODO: Don't always return the same error
@@ -520,15 +637,16 @@ mod post {
 mod patch {
     use std::sync::Arc;
 
-    use super::{AuthSession, IntoResponse, StatusCode};
+    use super::{post::UserForm, AuthSession, IntoResponse, StatusCode};
     use crate::{
         web::{AppState, CameraListChange, CameraMessage},
-        ApiChannelMessage, CameraPermission, CameraSetting, CameraSettingNoMeta, Model,
+        ApiChannelMessage, CameraPermission, CameraSetting, CameraSettingNoMeta, Model, User,
     };
     use axum::{
         extract::{Path, State},
         Form, Json,
     };
+    use password_auth::generate_hash;
     use serde::Deserialize;
     use tracing::warn;
 
@@ -551,7 +669,7 @@ mod patch {
                 }
 
                 let Ok(mut permission) =
-                    CameraPermission::get_using_id(&auth_session.backend.db, permission_id).await
+                    CameraPermission::get_using_id(&state.db_pool, permission_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -559,7 +677,7 @@ mod patch {
                 permission.can_view = permission_form.can_view;
                 permission.can_control = permission_form.can_control;
 
-                if (permission.update_using_self(&auth_session.backend.db).await).is_err() {
+                if (permission.update_using_self(&state.db_pool).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
@@ -596,15 +714,13 @@ mod patch {
     ) -> impl IntoResponse {
         match auth_session.user {
             Some(user) => {
-                let Ok(mut setting) =
-                    CameraSetting::get_using_id(&auth_session.backend.db, setting_id).await
+                let Ok(mut setting) = CameraSetting::get_using_id(&state.db_pool, setting_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
 
                 let Ok(permissions) =
-                    CameraPermission::list_for_camera(&auth_session.backend.db, setting.camera_id)
-                        .await
+                    CameraPermission::list_for_camera(&state.db_pool, setting.camera_id).await
                 else {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 };
@@ -636,7 +752,7 @@ mod patch {
                 setting.last_modified = CameraSetting::DEFAULT.last_modified();
                 setting.modified_by = Some(user.user_id);
 
-                if (setting.update_using_self(&auth_session.backend.db).await).is_err() {
+                if (setting.update_using_self(&state.db_pool).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
@@ -658,6 +774,61 @@ mod patch {
             None => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
+
+    pub async fn users(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+        Path(user_id): Path<i64>,
+        Form(user_form): Form<UserForm>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                let Ok(mut updated_user) = User::get_using_id(&state.db_pool, user_id).await else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+
+                if !user_form.username.is_ascii()
+                    || !user_form
+                        .username
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric())
+                {
+                    return StatusCode::BAD_REQUEST.into_response();
+                }
+
+                if updated_user.username != "admin" && updated_user.username != "guest" {
+                    updated_user.username = user_form.username;
+                }
+
+                if !user_form.password.is_empty() {
+                    if user_form.password.len() > 254
+                        || user_form.password.contains(char::is_whitespace)
+                    {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    }
+
+                    let Ok(password_hash) =
+                        tokio::task::spawn_blocking(|| generate_hash(user_form.password)).await
+                    else {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    };
+
+                    updated_user.password_hash = password_hash;
+                }
+
+                if (updated_user.update_using_self(&state.db_pool).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                Json(updated_user).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
 }
 
 mod delete {
@@ -666,7 +837,7 @@ mod delete {
     use super::{AuthSession, IntoResponse, StatusCode};
     use crate::{
         web::{AppState, CameraListChange},
-        ApiChannelMessage, Camera, Model,
+        ApiChannelMessage, Camera, Model, User,
     };
     use axum::{
         extract::{Path, State},
@@ -684,7 +855,7 @@ mod delete {
                     return StatusCode::FORBIDDEN.into_response();
                 }
 
-                if (Camera::delete_using_id(&auth_session.backend.db, camera_id).await).is_err() {
+                if (Camera::delete_using_id(&state.db_pool, camera_id).await).is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
@@ -699,6 +870,27 @@ mod delete {
                 }
 
                 Json(camera_id).into_response()
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        }
+    }
+
+    pub async fn users(
+        auth_session: AuthSession,
+        state: State<Arc<AppState>>,
+        Path(user_id): Path<i64>,
+    ) -> impl IntoResponse {
+        match auth_session.user {
+            Some(user) => {
+                if user.username != "admin" {
+                    return StatusCode::FORBIDDEN.into_response();
+                }
+
+                if (User::delete_using_id(&state.db_pool, user_id).await).is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                Json(user_id).into_response()
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
         }

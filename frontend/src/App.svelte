@@ -3,12 +3,14 @@
   import Router, { replace, location } from "svelte-spa-router";
   import PWABadge from "./lib/PWABadge.svelte";
   import Cameras from "./routes/Cameras.svelte";
+  import Users from "./routes/Users.svelte";
   import Login from "./routes/Login.svelte";
   import wrap from "svelte-spa-router/wrap";
   import { onDestroy, onMount } from "svelte";
   import { socket } from "$lib/stores/socketStore";
   import Home from "./routes/Home.svelte";
   import NotFound from "./routes/NotFound.svelte";
+  import { user } from "$lib/stores/userStore";
 
   // TODO: Add transitions to everything
   // TODO: Replace console.error and log with toast notifications
@@ -25,6 +27,8 @@
       return true;
     });
 
+  const isAdmin = () => $user?.user?.username === "admin";
+
   // TODO: Make these async
   const routes = {
     "/": wrap({
@@ -34,6 +38,10 @@
     "/cameras": wrap({
       component: Cameras,
       conditions: [isAuthorized],
+    }),
+    "/users": wrap({
+      component: Users,
+      conditions: [isAuthorized, isAdmin],
     }),
     "/login": Login,
     "*": NotFound,
