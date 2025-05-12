@@ -6,9 +6,13 @@
 
 <!-- TODO: Nicer README e.g. image, features, flow diagram, project structure -->
 
+![demo](landing/assets/demo.webp)
+
 # Oko
 
-Fully local home security system
+Fully local home security system.
+
+Final Year Project for SETU's [BSc (Hons.) in Software Systems Development][ssd].
 
 </div>
 
@@ -30,6 +34,10 @@ Fully local home security system
 ./make.sh t             # Run tests
 ./make.sh coverage
 ```
+
+## Poster
+
+![poster](landing/assets/poster.webp)
 
 ## License
 
@@ -121,5 +129,6 @@ video-to-image conversion needs."*][video2image-medium]
 [mdns]: https://github.com/PhysicalGraph/mdns
 [mdns-examples]: https://github.com/PhysicalGraph/mdns/tree/master/examples
 [mdns-license]: https://github.com/PhysicalGraph/mdns/blob/master/LICENSE
+[ssd]: https://www.setu.ie/courses/bsc-hons-in-software-systems-development
 
 <!-- https://eslint.org/docs/latest/use/configure/language-options -->
