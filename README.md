@@ -39,6 +39,22 @@ Final Year Project for SETU's [BSc (Hons.) in Software Systems Development][ssd]
 ./make.sh coverage
 ```
 
+## Repository Structure
+
+```bash
+.
+├── backend                         # Oko webserver (+ recording, mDNS, etc.)
+│   ├── ...
+│   └── utils
+│       ├── camera-impersonator     # CLI for sending fake camera images to Oko
+│       └── ws-utils                # Functions for WebSocket port reuse
+├── camera                          # ESP32-CAM code
+│   ├── ...
+│   └── esp-camera-rs               # Safe wrappers for unsafe camera functions
+├── frontend                        # Oko web UI
+└── landing                         # Project info page (https://oko.piotrp.dev/)
+```
+
 ## Features
 
 For a full list see the [Documents](#documents).
