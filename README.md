@@ -1,4 +1,7 @@
 <!-- markdownlint-configure-file {
+  "MD013": {
+    tables: false
+  },
   "MD033": false,
   "MD041": false
 } -->
@@ -35,9 +38,28 @@ Final Year Project for SETU's [BSc (Hons.) in Software Systems Development][ssd]
 ./make.sh coverage
 ```
 
+## Screenshots
+
+| Add Camera | Video Feed |
+|:----------:|:---------------:|
+| <img alt="add camera" width="400px" src="landing/assets/add.webp"/> | <img alt="video feed" width="400px" src="landing/assets/streaming.webp"/> |
+
+| Camera Settings | Captive Portal |
+|:----------:|:--------------:|
+| <img alt="camera settings" width="400px" src="landing/assets/settings.webp"/> | <img alt="captive portal" width="400px" src="landing/assets/captive.webp"/> |
+
 ## Poster
 
 ![poster](landing/assets/poster.webp)
+
+<details>
+  <summary>
+    Poster concept made at the start of the project
+  </summary>
+  <br/>
+
+  ![poster prototype](landing/assets/poster_prototype.webp)
+</details>
 
 ## License
 
