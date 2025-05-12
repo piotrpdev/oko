@@ -3,6 +3,7 @@
     tables: false
   },
   "MD033": false,
+  "MD036": false,
   "MD041": false
 } -->
 <div align="center">
@@ -38,19 +39,21 @@ Final Year Project for SETU's [BSc (Hons.) in Software Systems Development][ssd]
 ./make.sh coverage
 ```
 
-## Screenshots
+## Features
 
-| Add Camera | Video Feed |
-|:----------:|:---------------:|
-| <img alt="add camera" width="400px" src="landing/assets/add.webp"/> | <img alt="video feed" width="400px" src="landing/assets/streaming.webp"/> |
+For a full list see the [Documents](#documents).
 
-| Camera Settings | Captive Portal |
-|:----------:|:--------------:|
-| <img alt="camera settings" width="400px" src="landing/assets/settings.webp"/> | <img alt="captive portal" width="400px" src="landing/assets/captive.webp"/> |
+| Add Camera | Video Feed | Camera Settings | Captive Portal |
+|:----------:|:----------:|:---------------:|:--------------:|
+| <img alt="add camera" width="400px" src="landing/assets/add.webp"/> | <img alt="video feed" width="400px" src="landing/assets/streaming.webp"/> | <img alt="camera settings" width="400px" src="landing/assets/settings.webp"/> | <img alt="captive portal" width="400px" src="landing/assets/captive.webp"/> |
 
-## Poster
+## Documents
 
-![poster](landing/assets/poster.webp)
+*(each image links to its respective document)*
+
+| Presentation | Report | Poster |
+|:------------:|:------:|:------:|
+| [<img alt="add camera" width="800px" src="landing/assets/presentation.webp"/>](landing/assets/presentation.pdf) | [<img alt="video feed" width="400px" src="landing/assets/report.webp"/>](landing/assets/report.pdf) | [<img alt="poster" width="400px" src="landing/assets/poster.webp"/>](landing/assets/poster.pdf) |
 
 <details>
   <summary>
