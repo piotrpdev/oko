@@ -80,6 +80,12 @@ For a full list see the [Documents](#documents).
   ![poster prototype](landing/assets/poster_prototype.webp)
 </details>
 
+## Notes
+
+| Notes | Demo Notes |
+|:------------:|:------:|
+| [<img alt="notes" width="800px" src="landing/assets/notes.webp"/>](landing/assets/notes.webp) | [<img alt="demo notes" width="400px" src="landing/assets/demo_notes.webp"/>](landing/assets/demo_notes.webp) |
+
 ## License
 
 This project is licensed under the [GNU GPL v3.0][license].
