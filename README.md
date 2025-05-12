@@ -8,8 +8,6 @@
 } -->
 <div align="center">
 
-<!-- TODO: Nicer README e.g. image, features, flow diagram, project structure -->
-
 ![demo](landing/assets/demo.webp)
 
 # Oko
@@ -80,10 +78,28 @@ For a full list see the [Documents](#documents).
   ![poster prototype](landing/assets/poster_prototype.webp)
 </details>
 
+## Flow Diagrams
+
+| Oko Overview |
+|:-------:|
+| ![Oko Overview](landing/assets/flow-diagrams/Threads.svg) |
+
+| Account Creation | CI/CD Testing | Settings |
+|:----------------:|:-------------:|:--------:|
+| ![Account Creation](landing/assets/flow-diagrams/Account_Creation_Flow.svg) | ![CI/CD Testing](landing/assets/flow-diagrams/CICD_Testing.svg) | ![Settings](landing/assets/flow-diagrams/Camera_Settings_Flow.svg) |
+
+| Recording | Camera Detection |
+|:----------------:|:-------------:|
+| ![Recording](landing/assets/flow-diagrams/Record_Flow.svg) | ![Camera Detection](landing/assets/flow-diagrams/Camera_Detection_Flow.svg) |
+
+| Image Streaming | ESP32-CAM Setup | Permissions |
+|:---------------:|:---------------:|:-----------:|
+| ![Image Streaming](landing/assets/flow-diagrams/ESP32-CAM_Image_Streaming.svg) | ![Image Streaming](landing/assets/flow-diagrams/ESP32-CAM_Setup.svg) | ![Permissions](landing/assets/flow-diagrams/Permissions_Flow.svg) |
+
 ## Notes
 
 | Notes | Demo Notes |
-|:------------:|:------:|
+|:-----:|:----------:|
 | [<img alt="notes" width="800px" src="landing/assets/notes.webp"/>](landing/assets/notes.webp) | [<img alt="demo notes" width="400px" src="landing/assets/demo_notes.webp"/>](landing/assets/demo_notes.webp) |
 
 ## License
