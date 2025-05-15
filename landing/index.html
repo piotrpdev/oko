@@ -75,7 +75,7 @@
 
         #img-col {
             display: flex;
-            justify-content: flex-end;
+            justify-content: center;
         }
 
         .img-center {
@@ -94,7 +94,7 @@
 
         #img-col img {
             max-height: 90vh;
-            max-width: 90vw;
+            /* max-width: 90vw; */
 
             box-shadow: 0 5px 30px 0 rgba(255, 255, 255, 0.15);
 
@@ -103,9 +103,10 @@
             animation-duration: 0.3s;
         }
 
-        #demo-img {
+        .home-img {
             border-radius: 5px;
             border: solid 1px var(--border-color);
+            max-width: max-content;
             width: 100%;
             height: 100%;
         }
@@ -174,6 +175,10 @@
 
             #img-col {
                 margin-bottom: 10%;
+            }
+
+            #img-col img {
+                max-width: 90vw;
             }
 
             h5 {
@@ -256,18 +261,41 @@
             </div>
         </div>
         <div id="img-col">
-            <img id="demo-img" src="assets/demo.webp" width="2386" height="1160" alt="Oko demo">
+            <img id="demo-img" class="home-img" src="assets/demo.webp" width="2386" height="1160" alt="Oko demo">
+            <img id="streaming-img" class="home-img" src="assets/streaming.webp" width="2016" height="1134" alt="Oko streaming demo" style="display: none;">
+            <img id="captive-img" class="home-img" src="assets/captive.webp" width="1488" height="1984" alt="Oko captive portal demo" style="display: none;">
+            <img id="settings-img" class="home-img" src="assets/settings.webp" width="496" height="651" alt="Oko camera settings demo" style="display: none;">
+            <img id="add-img" class="home-img" src="assets/add.webp" width="496" height="651" alt="Oko add camera demo" style="display: none;">
             <img id="poster-img" src="assets/poster.webp" width="1684" height="2384" alt="Oko poster" style="display: none;">
         </div>
     </div>
     <script>
         "use strict";
 
+        const HOME_IMG_SWITCH_INTERVAL = 4000;
+
         const imgCol = document.getElementById("img-col");
         const aboutBtn = document.getElementById("about-btn");
         const posterBtn = document.getElementById("poster-btn");
-        const demoImg = document.getElementById("demo-img");
         const posterImg = document.getElementById("poster-img");
+
+        const demoImg = document.getElementById("demo-img");
+        const streamingImg = document.getElementById("streaming-img");
+        const captiveImg = document.getElementById("captive-img");
+        const settingsImg = document.getElementById("settings-img");
+        const addImg = document.getElementById("add-img");
+
+        const homeImgs = [demoImg, streamingImg, captiveImg, settingsImg, addImg];
+
+        let imgIdx = 0;
+
+        function rotateHomeImages() {
+            homeImgs[imgIdx].style.display = "none";
+            imgIdx = (imgIdx + 1) % homeImgs.length;
+            homeImgs[imgIdx].style.display = "block";
+        }
+
+        let rotateHomeImagesInterval = window.screen.width > 1024 ? setInterval(rotateHomeImages, HOME_IMG_SWITCH_INTERVAL) : undefined;
 
         aboutBtn.addEventListener("click", () => {
             aboutBtn.classList.add("selected");
@@ -275,13 +303,19 @@
             imgCol.classList.remove("img-center");
             demoImg.style.display = "block";
             posterImg.style.display = "none";
+
+            if (typeof rotateHomeImagesInterval === "undefined") {
+                rotateHomeImagesInterval = window.screen.width > 1024 ? setInterval(rotateHomeImages, HOME_IMG_SWITCH_INTERVAL) : undefined;
+            }
         });
 
         posterBtn.addEventListener("click", () => {
+            rotateHomeImagesInterval = clearInterval(rotateHomeImagesInterval);
+            imgIdx = 0;
             posterBtn.classList.add("selected");
             aboutBtn.classList.remove("selected");
             imgCol.classList.add("img-center");
-            demoImg.style.display = "none";
+            homeImgs.forEach(img => img.style.display = "none");
             posterImg.style.display = "block";
         });
     </script>
